@@ -44,5 +44,6 @@ data class MatchEntity(
     val foulsHome: Int = 9,
     val foulsAway: Int = 12,
     val isFavorite: Boolean = false,
+    val dateKey: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 )

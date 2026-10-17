@@ -16,10 +16,10 @@ class MultiProviderOrchestrator(
     private val memoryCache: MemoryLruCache<String, Any> = MemoryLruCache(maxCapacity = 200)
 ) {
     val providers: List<SportsApiProvider> = listOf(
-        ApiFootballProvider(),
-        TheSportsDbProvider(),
-        OptaStatsPerformProvider(),
         EspnApiProvider(),
+        TheSportsDbProvider(),
+        ApiFootballProvider(),
+        OptaStatsPerformProvider(),
         MultiSportProvider()
     )
 
@@ -76,6 +76,9 @@ class MultiProviderOrchestrator(
                 if (result.isSuccess) {
                     val data = result.getOrNull()
                     if (data != null) {
+                        if (data is Collection<*> && data.isEmpty()) {
+                            continue // Skip empty lists so real data provider is called
+                        }
                         _activeProvider.value = provider.name
                         memoryCache.put(cacheKey, data)
                         return data

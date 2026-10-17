@@ -74,7 +74,7 @@ class SportsRepository(
                                 awayLineup = awayLineup,
                                 h2h = memoryMatch?.h2h ?: HeadToHead()
                             ).copy(
-                                playerConditions = memoryMatch?.playerConditions ?: generatePciForTeams(entity.homeTeam, entity.awayTeam),
+                                playerConditions = memoryMatch?.playerConditions ?: generatePciForTeams(entity.homeTeam, entity.awayTeam, homeLineup, awayLineup),
                                 broadcasters = memoryMatch?.broadcasters ?: generateBroadcastersForMatch(entity.league)
                             )
                         }
@@ -88,12 +88,19 @@ class SportsRepository(
         scope.launch(Dispatchers.IO) {
             val count = matchDao.getMatchesCount()
             if (count == 0) {
-                val initial = generateSampleMatches()
-                _matches.value = initial
-                matchDao.insertMatches(initial.map { it.toEntity() })
+                val realMatches = try {
+                    orchestrator.executeFallbackChain("initial_live_matches", { it.fetchLiveMatches() }) {
+                        generateSampleMatches()
+                    }
+                } catch (_: Exception) {
+                    generateSampleMatches()
+                }
+                val matchesToSave = if (realMatches.isNotEmpty()) realMatches else generateSampleMatches()
+                _matches.value = matchesToSave
+                matchDao.insertMatches(matchesToSave.map { it.toEntity() })
 
                 // Pre-cache team rosters locally into Room to guarantee offline availability and 0 latency
-                val rostersToCache = initial.flatMap { match ->
+                val rostersToCache = matchesToSave.flatMap { match ->
                     listOfNotNull(
                         match.homeLineup?.let { TeamRosterMapper.toEntity(match.homeTeam, it, match.league, match.sport) },
                         match.awayLineup?.let { TeamRosterMapper.toEntity(match.awayTeam, it, match.league, match.sport) }
@@ -102,6 +109,17 @@ class SportsRepository(
                 if (rostersToCache.isNotEmpty()) {
                     rosterDao.insertRosters(rostersToCache)
                 }
+            } else {
+                // If we already have cached matches, attempt background real refresh
+                try {
+                    val realMatches = orchestrator.executeFallbackChain("background_sync_matches", { it.fetchLiveMatches() }) {
+                        emptyList()
+                    }
+                    if (realMatches.isNotEmpty()) {
+                        _matches.value = realMatches
+                        matchDao.insertMatches(realMatches.map { it.toEntity() })
+                    }
+                } catch (_: Exception) {}
             }
             _leagues.value = generate50PlusLeagues()
         }
@@ -144,6 +162,22 @@ class SportsRepository(
     fun refreshMatches() {
         scope.launch(Dispatchers.IO) {
             _isLoading.value = true
+            try {
+                val realMatches = orchestrator.executeFallbackChain("manual_refresh_matches", { it.fetchLiveMatches() }) {
+                    emptyList()
+                }
+                if (realMatches.isNotEmpty()) {
+                    _matches.value = realMatches
+                    matchDao.insertMatches(realMatches.map { it.toEntity() })
+                    _lastRefreshed.value = System.currentTimeMillis()
+                    _isLoading.value = false
+                    _refreshNotification.value = "تم تحديث البيانات من السيرفر المباشر بنجاح"
+                    delay(2500)
+                    _refreshNotification.value = null
+                    return@launch
+                }
+            } catch (_: Exception) {}
+
             // Fast delay simulating high-throughput delta sync
             delay(400)
 
@@ -261,115 +295,91 @@ class SportsRepository(
         return _matches.value.firstOrNull { it.id == id }
     }
 
-    private fun generatePciForTeams(homeTeam: String, awayTeam: String): List<PlayerCondition> {
+    private fun generatePciForTeams(
+        homeTeam: String,
+        awayTeam: String,
+        homeLineup: TeamLineup? = null,
+        awayLineup: TeamLineup? = null
+    ): List<PlayerCondition> {
         val conditions = mutableListOf<PlayerCondition>()
 
-        // Home team star 1
-        conditions.add(
-            PlayerCondition(
-                playerId = "p_1",
-                playerName = if (homeTeam.contains("مدريد")) "فينيسيوس جونيور" else "محمد صلاح",
-                playerNumber = if (homeTeam.contains("مدريد")) 7 else 11,
-                teamName = homeTeam,
-                position = "جناح هجومي",
-                factors = PciFactors(
-                    physicalFatigue = 94f,
-                    mentalPsychological = 92f,
-                    recentForm = 96f,
-                    injuryRisk = 90f,
-                    travelScheduleLoad = 85f,
-                    tacticalFit = 95f,
-                    weatherPitchAdaptation = 90f
-                ),
-                timeline = listOf(
-                    PciTimelinePoint(0, 96, "بداية المباراة بكامل اللياقة"),
-                    PciTimelinePoint(30, 94, "سرعات عالية وتفوق 1v1"),
-                    PciTimelinePoint(60, 90, "ثبات في التحولات"),
-                    PciTimelinePoint(85, 87, "جهد بدني كبير")
-                ),
-                keyStrengths = listOf("تسارع فائق", "إنهاء قاتل", "تمركز ذكي"),
-                aiConditionSummary = "جاهزية بدنية وذهنية استثنائية (PCI 92)؛ معدل استرجاع طاقة مرتفع وفرص صناعة الفارق تتجاوز 88%."
-            )
-        )
+        // 1. Home Team Players (drawn directly from real starters)
+        val homeStarters = homeLineup?.starters ?: emptyList()
+        val homeKeyPlayers = if (homeStarters.size >= 3) {
+            listOf(homeStarters.last(), homeStarters[homeStarters.size / 2], homeStarters.first())
+        } else {
+            emptyList()
+        }
 
-        // Home team midfield leader
-        conditions.add(
-            PlayerCondition(
-                playerId = "p_2",
-                playerName = if (homeTeam.contains("مدريد")) "جود بيلينغهام" else "ألكسيس ماك أليستر",
-                playerNumber = if (homeTeam.contains("مدريد")) 5 else 10,
-                teamName = homeTeam,
-                position = "وسط هجومي",
-                factors = PciFactors(
-                    physicalFatigue = 86f,
-                    mentalPsychological = 90f,
-                    recentForm = 88f,
-                    injuryRisk = 85f,
-                    travelScheduleLoad = 78f,
-                    tacticalFit = 92f,
-                    weatherPitchAdaptation = 88f
-                ),
-                timeline = listOf(
-                    PciTimelinePoint(0, 92),
-                    PciTimelinePoint(45, 87),
-                    PciTimelinePoint(75, 82)
-                ),
-                aiConditionSummary = "أداء بدني متوازن مع تفوق في استخلاص الكرات الثانية والتغطية الدفاعية في العمق."
-            )
-        )
+        if (homeKeyPlayers.isNotEmpty()) {
+            homeKeyPlayers.forEachIndexed { idx, player ->
+                val baseFreshness = (86f + (idx * 3)).coerceIn(60f, 98f)
+                conditions.add(
+                    PlayerCondition(
+                        playerId = "p_home_${idx}_${player.number}",
+                        playerName = player.name,
+                        playerNumber = player.number,
+                        teamName = homeTeam,
+                        position = player.position,
+                        factors = PciFactors(
+                            physicalFatigue = baseFreshness,
+                            mentalPsychological = 90f,
+                            recentForm = (player.rating * 10f).coerceIn(70f, 98f),
+                            injuryRisk = 88f,
+                            travelScheduleLoad = 82f,
+                            tacticalFit = 93f,
+                            weatherPitchAdaptation = 89f
+                        ),
+                        timeline = listOf(
+                            PciTimelinePoint(0, baseFreshness.toInt()),
+                            PciTimelinePoint(45, (baseFreshness - 5).toInt()),
+                            PciTimelinePoint(75, (baseFreshness - 10).toInt())
+                        ),
+                        keyStrengths = listOf("جاهزية تكتيكية عالية", "فاعلية هجومية ودفاعية"),
+                        aiConditionSummary = "اللاعب ${player.name} يقدم مساهمة محورية في تشكيلة $homeTeam بمركز ${player.position} وجاهزية بدنية مستقرة."
+                    )
+                )
+            }
+        }
 
-        // Away team star 1
-        conditions.add(
-            PlayerCondition(
-                playerId = "p_3",
-                playerName = if (awayTeam.contains("سيتي")) "إيرلينغ هالاند" else "بوكايو ساكا",
-                playerNumber = if (awayTeam.contains("سيتي")) 9 else 7,
-                teamName = awayTeam,
-                position = if (awayTeam.contains("سيتي")) "قلب هجوم" else "جناح أيمن",
-                factors = PciFactors(
-                    physicalFatigue = 91f,
-                    mentalPsychological = 95f,
-                    recentForm = 93f,
-                    injuryRisk = 88f,
-                    travelScheduleLoad = 82f,
-                    tacticalFit = 94f,
-                    weatherPitchAdaptation = 89f
-                ),
-                timeline = listOf(
-                    PciTimelinePoint(0, 95),
-                    PciTimelinePoint(45, 91),
-                    PciTimelinePoint(80, 88)
-                ),
-                keyStrengths = listOf("قوة جسدية خارقة", "إنهاء هجمات من لمسة واحدة"),
-                aiConditionSummary = "مؤشر PCI يبلغ 91؛ استغلال ممتاز للمساحات بين قلبي الدفاع مع خطورة فائقة في الكرات الهوائية."
-            )
-        )
+        // 2. Away Team Players (drawn directly from real starters)
+        val awayStarters = awayLineup?.starters ?: emptyList()
+        val awayKeyPlayers = if (awayStarters.size >= 3) {
+            listOf(awayStarters.last(), awayStarters[awayStarters.size / 2], awayStarters.first())
+        } else {
+            emptyList()
+        }
 
-        // Away team playmaker (moderate fatigue example)
-        conditions.add(
-            PlayerCondition(
-                playerId = "p_4",
-                playerName = if (awayTeam.contains("سيتي")) "كيفين دي بروين" else "مارتن أوديغارد",
-                playerNumber = if (awayTeam.contains("سيتي")) 17 else 8,
-                teamName = awayTeam,
-                position = "صانع ألعاب",
-                factors = PciFactors(
-                    physicalFatigue = 72f,
-                    mentalPsychological = 92f,
-                    recentForm = 85f,
-                    injuryRisk = 68f, // Moderate injury risk / recovery
-                    travelScheduleLoad = 65f,
-                    tacticalFit = 95f,
-                    weatherPitchAdaptation = 84f
-                ),
-                timeline = listOf(
-                    PciTimelinePoint(0, 85),
-                    PciTimelinePoint(45, 78),
-                    PciTimelinePoint(70, 68)
-                ),
-                aiConditionSummary = "رؤية استثنائية للملعب مع تنبيه بضرورة تقنين المجهود في الربع ساعة الأخير لتفادي الإجهاد العضلي."
-            )
-        )
+        if (awayKeyPlayers.isNotEmpty()) {
+            awayKeyPlayers.forEachIndexed { idx, player ->
+                val baseFreshness = (83f + (idx * 3)).coerceIn(58f, 96f)
+                conditions.add(
+                    PlayerCondition(
+                        playerId = "p_away_${idx}_${player.number}",
+                        playerName = player.name,
+                        playerNumber = player.number,
+                        teamName = awayTeam,
+                        position = player.position,
+                        factors = PciFactors(
+                            physicalFatigue = baseFreshness,
+                            mentalPsychological = 88f,
+                            recentForm = (player.rating * 10f).coerceIn(68f, 96f),
+                            injuryRisk = 84f,
+                            travelScheduleLoad = 78f,
+                            tacticalFit = 91f,
+                            weatherPitchAdaptation = 85f
+                        ),
+                        timeline = listOf(
+                            PciTimelinePoint(0, baseFreshness.toInt()),
+                            PciTimelinePoint(45, (baseFreshness - 6).toInt()),
+                            PciTimelinePoint(75, (baseFreshness - 12).toInt())
+                        ),
+                        keyStrengths = listOf("سرعة ارتداد دفاعي", "تمركز متقدم"),
+                        aiConditionSummary = "اللاعب ${player.name} في قمة التركيز لمباراة $awayTeam مع تنبيه بضرورة تقنين الجهد في الشوط الثاني."
+                    )
+                )
+            }
+        }
 
         return conditions
     }
@@ -889,14 +899,79 @@ class SportsRepository(
             TopScorer(4, "لامين يامال", "برشلونة", 9, 12)
         )
 
+        val standingsSPL = listOf(
+            StandingRow(1, "الهلال", "", 24, 21, 3, 0, 72, 18, 54, 66),
+            StandingRow(2, "الاتحاد", "", 24, 19, 3, 2, 58, 20, 38, 60),
+            StandingRow(3, "النصر", "", 24, 16, 5, 3, 56, 24, 32, 53),
+            StandingRow(4, "القادسية", "", 24, 15, 2, 7, 42, 26, 16, 47),
+            StandingRow(5, "الشباب", "", 24, 13, 4, 7, 39, 28, 11, 43),
+            StandingRow(6, "الأهلي", "", 24, 12, 5, 7, 44, 29, 15, 41),
+            StandingRow(7, "الاتفاق", "", 24, 9, 6, 9, 31, 33, -2, 33),
+            StandingRow(8, "التعاون", "", 24, 9, 5, 10, 28, 30, -2, 32)
+        )
+
+        val topScorersSPL = listOf(
+            TopScorer(1, "ألكسندر ميتروفيتش", "الهلال", 23, 5),
+            TopScorer(2, "كريستيانو رونالدو", "النصر", 21, 7),
+            TopScorer(3, "كريم بنزيما", "الاتحاد", 17, 6),
+            TopScorer(4, "أندرسون تاليسكا", "النصر", 12, 4)
+        )
+
+        val standingsEgypt = listOf(
+            StandingRow(1, "الأهلي", "", 22, 17, 4, 1, 48, 14, 34, 55),
+            StandingRow(2, "بيراميدز", "", 22, 15, 5, 2, 42, 17, 25, 50),
+            StandingRow(3, "الزمالك", "", 22, 13, 5, 4, 39, 21, 18, 44),
+            StandingRow(4, "المصري البورسعيدي", "", 22, 10, 7, 5, 30, 24, 6, 37),
+            StandingRow(5, "سيراميكا كليوباترا", "", 22, 9, 6, 7, 31, 28, 3, 33),
+            StandingRow(6, "زد إف سي", "", 22, 8, 8, 6, 26, 23, 3, 32)
+        )
+
+        val topScorersEgypt = listOf(
+            TopScorer(1, "وسام أبو علي", "الأهلي", 18, 4),
+            TopScorer(2, "فيستون ماييلي", "بيراميدز", 16, 2),
+            TopScorer(3, "حسام أشرف", "بلدية المحلة", 14, 1),
+            TopScorer(4, "أحمد مصطفى زيزو", "الزمالك", 11, 9)
+        )
+
+        val standingsMorocco = listOf(
+            StandingRow(1, "الرجاء الرياضي", "", 26, 18, 8, 0, 54, 15, 39, 62),
+            StandingRow(2, "الجيش الملكي", "", 26, 19, 4, 3, 58, 19, 39, 61),
+            StandingRow(3, "نهضة بركان", "", 26, 13, 10, 3, 36, 18, 18, 49),
+            StandingRow(4, "الوداد الرياضي", "", 26, 12, 7, 7, 33, 23, 10, 43)
+        )
+
+        val standingsTunisia = listOf(
+            StandingRow(1, "الترجي الرياضي التونسي", "", 20, 15, 4, 1, 38, 11, 27, 49),
+            StandingRow(2, "الاتحاد المنستيري", "", 20, 12, 5, 3, 30, 14, 16, 41),
+            StandingRow(3, "النجم الساحلي", "", 20, 10, 6, 4, 26, 16, 10, 36),
+            StandingRow(4, "النادي الإفريقي", "", 20, 9, 6, 5, 24, 18, 6, 33),
+            StandingRow(5, "النادي الرياضي الصفاقسي", "", 20, 8, 7, 5, 20, 15, 5, 31)
+        )
+
+        val standingsBundesliga = listOf(
+            StandingRow(1, "بايرن ميونخ", "", 26, 20, 4, 2, 74, 24, 50, 64),
+            StandingRow(2, "باير ليفركوزن", "", 26, 18, 6, 2, 65, 28, 37, 60),
+            StandingRow(3, "آينتراخت فرانكفورت", "", 26, 15, 6, 5, 53, 33, 20, 51),
+            StandingRow(4, "لايبزيغ", "", 26, 14, 6, 6, 48, 29, 19, 48),
+            StandingRow(5, "بوروسيا دورتموند", "", 26, 13, 6, 7, 49, 38, 11, 45)
+        )
+
+        val standingsSerieA = listOf(
+            StandingRow(1, "إنتر ميلان", "", 28, 21, 5, 2, 68, 22, 46, 68),
+            StandingRow(2, "نابولي", "", 28, 19, 5, 4, 51, 23, 28, 62),
+            StandingRow(3, "أتالانتا", "", 28, 18, 4, 6, 63, 29, 34, 58),
+            StandingRow(4, "يوفنتوس", "", 28, 14, 13, 1, 45, 21, 24, 55),
+            StandingRow(5, "لاتسيو", "", 28, 15, 4, 9, 48, 37, 11, 49)
+        )
+
         return listOf(
             // Tier 1: Elite
             League("ucl", "دوري أبطال أوروبا (UCL)", "أوروبا", "football", LeagueTier.TIER_1_ELITE, standings = standingsPL.take(4)),
             League("pl", "الدوري الإنجليزي الممتاز (Premier League)", "إنجلترا", "football", LeagueTier.TIER_1_ELITE, standings = standingsPL, topScorers = topScorersPL),
             League("laliga", "الدوري الإسباني (LaLiga EA Sports)", "إسبانيا", "football", LeagueTier.TIER_1_ELITE, standings = standingsLaLiga, topScorers = topScorersLaLiga),
-            League("seriea", "الدوري الإيطالي (Serie A)", "إيطاليا", "football", LeagueTier.TIER_1_ELITE, standings = standingsPL.take(4)),
-            League("bundesliga", "الدوري الألماني (Bundesliga)", "ألمانيا", "football", LeagueTier.TIER_1_ELITE, standings = standingsPL.take(4)),
-            League("spl", "دوري روشن السعودي للمحترفين (SPL)", "السعودية", "football", LeagueTier.TIER_1_ELITE, standings = standingsPL.take(4)),
+            League("seriea", "الدوري الإيطالي (Serie A)", "إيطاليا", "football", LeagueTier.TIER_1_ELITE, standings = standingsSerieA),
+            League("bundesliga", "الدوري الألماني (Bundesliga)", "ألمانيا", "football", LeagueTier.TIER_1_ELITE, standings = standingsBundesliga),
+            League("spl", "دوري روشن السعودي للمحترفين (SPL)", "السعودية", "football", LeagueTier.TIER_1_ELITE, standings = standingsSPL, topScorers = topScorersSPL),
             League("worldcup", "كأس العالم FIFA", "العالم", "football", LeagueTier.TIER_1_ELITE),
 
             // Tier 2: Top
@@ -906,8 +981,9 @@ class SportsRepository(
             League("ligaportugal", "الدوري البرتغالي (Liga Portugal Betclic)", "البرتغال", "football", LeagueTier.TIER_2_TOP),
             League("afc_elite", "دوري أبطال آسيا للنخبة (AFC Elite)", "آسيا", "football", LeagueTier.TIER_2_TOP),
             League("caf_cl", "دوري أبطال أفريقيا (CAF Champions League)", "أفريقيا", "football", LeagueTier.TIER_2_TOP),
-            League("egypt_pl", "الدوري المصري الممتاز (نيل)", "مصر", "football", LeagueTier.TIER_2_TOP),
-            League("morocco_botola", "الدوري المغربي للمحترفين (البطولة برو)", "المغرب", "football", LeagueTier.TIER_2_TOP),
+            League("egypt_pl", "الدوري المصري الممتاز (نيل)", "مصر", "football", LeagueTier.TIER_2_TOP, standings = standingsEgypt, topScorers = topScorersEgypt),
+            League("morocco_botola", "الدوري المغربي للمحترفين (البطولة برو)", "المغرب", "football", LeagueTier.TIER_2_TOP, standings = standingsMorocco),
+            League("tunisia_lp1", "الرابطة التونسية المحترفة الأولى", "تونس", "football", LeagueTier.TIER_2_TOP, standings = standingsTunisia),
             League("algeria_l1", "الرابطة الجزائرية المحترفة الأولى", "الجزائر", "football", LeagueTier.TIER_2_TOP),
             League("iraq_stars", "دوري نجوم العراق للمحترفين", "العراق", "football", LeagueTier.TIER_2_TOP),
 

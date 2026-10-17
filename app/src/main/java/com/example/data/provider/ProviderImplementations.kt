@@ -84,8 +84,22 @@ class EspnApiProvider : SportsApiProvider {
     override val name: String = "ESPN Global Sports API"
     override val tier: ProviderTier = ProviderTier.TIER_2_SPECIALIZED
     override val circuitBreaker: CircuitBreaker = CircuitBreaker()
+    private val apiClient = RealSportsApiClient()
 
-    override suspend fun fetchLiveMatches(): Result<List<Match>> = Result.success(emptyList())
+    override suspend fun fetchLiveMatches(): Result<List<Match>> {
+        return try {
+            val matches = apiClient.fetchRealMatches()
+            if (matches.isNotEmpty()) {
+                circuitBreaker.recordSuccess()
+                Result.success(matches)
+            } else {
+                Result.success(emptyList())
+            }
+        } catch (e: Exception) {
+            circuitBreaker.recordFailure()
+            Result.failure(e)
+        }
+    }
     override suspend fun fetchMatchDetails(matchId: String): Result<Match?> = Result.success(null)
     override suspend fun fetchLeagues(): Result<List<League>> = Result.success(emptyList())
     override suspend fun fetchPlayerConditions(matchId: String): Result<List<PlayerCondition>> = Result.success(emptyList())

@@ -61,7 +61,8 @@ fun MatchEntity.toDomainModel(
         homeLineup = homeLineup,
         awayLineup = awayLineup,
         h2h = h2h,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        dateKey = dateKey
     )
 }
 
@@ -105,6 +106,7 @@ fun Match.toEntity(): MatchEntity {
         foulsHome = stats.foulsHome,
         foulsAway = stats.foulsAway,
         isFavorite = isFavorite,
+        dateKey = dateKey,
         updatedAt = System.currentTimeMillis()
     )
 }

@@ -98,6 +98,7 @@ data class Match(
     val awayLineup: TeamLineup? = null,
     val h2h: HeadToHead = HeadToHead(),
     val isFavorite: Boolean = false,
+    val dateKey: String = "",
     val playerConditions: List<PlayerCondition> = emptyList(),
     val broadcasters: List<Broadcaster> = emptyList()
 ) {

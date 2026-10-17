@@ -320,22 +320,45 @@ fun LeaguesTab(
                     }
                 } else {
                     items(currentLeague.standings) { row ->
+                        val isChampions = row.rank <= 4
+                        val isEuropa = row.rank in 5..6
+                        val isRelegation = currentLeague.standings.size >= 6 && row.rank >= (currentLeague.standings.size - 1)
+                        val rankColor = when {
+                            isChampions -> AppColors.NeonBlue
+                            isEuropa -> AppColors.NeonPurple
+                            isRelegation -> AppColors.NeonRed
+                            else -> AppColors.TextMuted
+                        }
+                        val rowBg = when {
+                            isChampions -> AppColors.NeonBlue.copy(alpha = 0.08f)
+                            isRelegation -> AppColors.NeonRed.copy(alpha = 0.08f)
+                            else -> Color.Transparent
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 3.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (row.rank <= 4) AppColors.Surface.copy(alpha = 0.8f) else Color.Transparent)
+                                .background(rowBg)
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${row.rank}",
-                                color = if (row.rank <= 4) AppColors.NeonBlue else AppColors.TextMuted,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(22.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(rankColor.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${row.rank}",
+                                    color = rankColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = row.teamName,
                                 color = Color.White,
@@ -364,6 +387,31 @@ fun LeaguesTab(
                                 modifier = Modifier.width(36.dp),
                                 textAlign = TextAlign.Center
                             )
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(AppColors.NeonBlue))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("دوري الأبطال / النخبة", color = AppColors.TextMuted, fontSize = 10.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(AppColors.NeonPurple))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("الدوري الأوروبي / الاتحاد", color = AppColors.TextMuted, fontSize = 10.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(AppColors.NeonRed))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("منطقة الهبوط", color = AppColors.TextMuted, fontSize = 10.sp)
+                            }
                         }
                     }
                 }

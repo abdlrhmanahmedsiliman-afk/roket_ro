@@ -105,7 +105,13 @@ fun MatchesTab(
                     match.league.contains(searchQuery, ignoreCase = true)
 
             // When user picks a date, show matching live/scheduled matches
-            val matchesDay = if (selectedDay?.isToday == true) {
+            val matchesDay = if (selectedDay != null && match.dateKey.isNotBlank()) {
+                if (selectedDay.isToday) {
+                    match.dateKey == selectedDay.dateKey || match.isLive
+                } else {
+                    match.dateKey == selectedDay.dateKey
+                }
+            } else if (selectedDay?.isToday == true) {
                 true // Today shows live & upcoming matches
             } else if (selectedDay?.offsetDays == -1) {
                 match.isFinished || match.minute > 0

@@ -48,6 +48,7 @@ fun MainShellScreen(
     var currentSection by remember { mutableStateOf(MainNavSection.MATCHES) }
     var selectedMatch by remember { mutableStateOf<Match?>(null) }
     var isAiAssistantOpen by remember { mutableStateOf(false) }
+    var showNotificationsDialog by remember { mutableStateOf(false) }
 
     val matches by repository.matches.collectAsState()
     val leagues by repository.leagues.collectAsState()
@@ -184,6 +185,34 @@ fun MainShellScreen(
                             )
                         }
 
+                        // Notifications Bell Button with Unread Badge
+                        Box {
+                            IconButton(
+                                onClick = { showNotificationsDialog = true },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(AppColors.Surface)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Notifications,
+                                    contentDescription = "الإشعارات",
+                                    tint = AppColors.TextPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            // Unread indicator dot
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .align(Alignment.TopEnd)
+                                    .clip(CircleShape)
+                                    .background(AppColors.NeonRed)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
                         IconButton(
                             onClick = { isAiAssistantOpen = true },
                             modifier = Modifier
@@ -294,6 +323,12 @@ fun MainShellScreen(
                     .padding(bottom = 12.dp, end = 6.dp)
             )
         }
+
+        if (showNotificationsDialog) {
+            NotificationsCenterDialog(
+                onDismiss = { showNotificationsDialog = false }
+            )
+        }
     }
 }
 
@@ -346,4 +381,61 @@ fun MainBottomNavItem(
             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium
         )
     }
+}
+
+@Composable
+fun NotificationsCenterDialog(onDismiss: () -> Unit) {
+    val sampleNotifications = listOf(
+        Triple("⚽ هدف مباشر!", "سجل فينيسيوس جونيور الهدف الثاني لـ ريال مدريد (د68')", AppColors.NeonCyan),
+        Triple("⏱️ بداية الشوط الثاني", "انطلقت أحداث الشوط الثاني لمباراة الهلال والاتحاد", AppColors.NeonBlue),
+        Triple("🔴 بطاقة حمراء", "طرد مباشر لمدافع الفريق المنافس بعد تدخل قوي", AppColors.NeonRed),
+        Triple("🔔 تذكير بمباراة قمة", "تنطلق بعد 30 دقيقة قمة ليفربول ومانشستر سيتي في البريميرليج", AppColors.Coral)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AppColors.BgElevated,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.NotificationsActive,
+                    contentDescription = null,
+                    tint = AppColors.NeonCyan,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "مركز الإشعارات الحية",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                sampleNotifications.forEach { (title, desc, color) ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AppColors.Surface)
+                            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text(text = title, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(text = desc, color = AppColors.TextPrimary, fontSize = 11.sp, lineHeight = 16.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق", color = AppColors.NeonBlue, fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
