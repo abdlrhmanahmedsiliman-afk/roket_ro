@@ -1,0 +1,84 @@
+# .cursorrules — roket_ro Sports Analytics Platform
+# High-Performance Sports Architecture & Coding Guidelines
+
+## 1. Project Overview & Identity
+- **Project Name:** roket_ro
+- **Type:** Ultra-Low Latency Intelligent Sports Analytics Platform
+- **Design Philosophy:** Cyberpunk Neumorphism / Glassmorphism in Dark Mode
+  - Core Palette: `Bg #0B0F1A`, `Surface #131A2A`, `NeonBlue #5BC8FF`, `NeonCyan #4FE3C1`, `NeonOrange/Coral #FF8A65`, `NeonRed #FF5252`, `Gold #FFD700`
+- **Guiding Principles:**
+  - 100% Betting-Free / Zero Gambling Odds or Affiliates.
+  - 100% Legal & Official Broadcasters & Media Links.
+  - Sub-second UI responsiveness, 60fps locked, zero freeze / zero jank.
+
+---
+
+## 2. Architecture & Code Style
+- **Mobile Runtime:** Kotlin 2.x + Jetpack Compose (Material 3).
+- **Architecture Pattern:** MVVM + Clean Architecture with Stale-While-Revalidate caching pattern.
+- **State Management:** `StateFlow` & `MutableStateFlow` with lifecycle-aware observation (`collectAsState()`).
+- **Data Persistence:**
+  - Fast Memory Layer: `MemoryLruCache` with TTL eviction.
+  - Offline-first Layer: Room SQLite Database with destructive/safe migrations.
+  - Cloud / Backend: Multi-Provider REST + WebSocket ticker streams.
+
+---
+
+## 3. Seamless 60fps Performance Rules
+1. **No Spinner Freezes:** Always use `shimmerEffect()` skeletons for loading states to maintain 60fps fluid visual feedback.
+2. **Recomposition Optimization:**
+   - Mark stable domain models with `@Immutable` or utilize data classes.
+   - Use `remember` and `derivedStateOf` for costly calculations (filters, sorting, radar coordinates).
+   - Never perform JSON parsing or intensive mathematics inside Composables; delegate to `Dispatchers.Default` or `Dispatchers.IO`.
+3. **Adaptive Link Tuning:**
+   - Observe `ConnectionQualityMonitor` to dynamically scale ticker polling rates (1.5s on Wi-Fi/5G down to 12s on low battery/poor networks).
+
+---
+
+## 4. Multi-Provider Sports API Integration
+- **Tier 1 (Primary Feeds):**
+  - `API-Football` (RapidAPI): Fixtures, Live Events, Lineups, Rosters.
+  - `TheSportsDB`: Team Badges, Venues, Player Headshots, Stadiums.
+  - `SportRadar`: Official enterprise real-time coverage.
+- **Tier 2 (Specialized Analytics):**
+  - `Stats Perform (Opta)`: Expected Goals (xG), Expected Assists (xA), Pass Networks, Defensive Field Tilt, PPDA.
+  - `Football-Data.org`: Top European league standings and historical fixtures.
+  - `ESPN Global Sports API`: Real-time news recaps, schedules, and injury bulletins.
+- **Tier 3 (Multi-Sport Ecosystem):**
+  - NBA Official API / FIBA: Basketball telemetry & quarters.
+  - ATP / WTA Tour: Tennis sets, games, break points.
+  - FastF1 / Ergast: Formula 1 lap times, telemetry, tyre degradation.
+  - CricAPI: Cricket ball-by-ball, overs, wickets.
+- **Fallback Chain:**
+  `Tier 1 -> Tier 2 -> Tier 3 -> In-Memory LRU Cache -> Room Local DB`
+- **Circuit Breaker:** 3 consecutive failures trip the circuit with 30s probe reset. Rate limits managed via Token Bucket.
+
+---
+
+## 5. Player Condition Index (PCI) Standards
+- PCI is a proprietary composite rating from 0 to 100 calculated across 7 weighted dimensions:
+  1. `Physical Fatigue` (22% weight)
+  2. `Recent Form` (20% weight)
+  3. `Injury Risk / Load` (18% weight)
+  4. `Tactical Fit` (14% weight)
+  5. `Mental & Psychological` (12% weight)
+  6. `Travel & Schedule Density` (8% weight)
+  7. `Weather / Pitch Adaptation` (6% weight)
+- Visualized using:
+  - `PlayerConditionRing`: Glowing pulsed ring with color thresholds (`Peak >= 88`, `Optimal >= 75`, `Moderate >= 60`, `High Risk < 60`).
+  - `PciRadarChart`: Geometric 7-axis radar canvas with radial gradient fill.
+  - `PciTimelineChart`: Minute-by-minute stamina and condition curve over 90 minutes.
+
+---
+
+## 6. Official Broadcasters Guide
+- Only list authorized legal broadcasters (beIN SPORTS, Sky Sports, DAZN, ESPN+, Canal+, TNT Sports, SSC, Shahid VIP, Apple TV MLS Season Pass).
+- Include Stream Format badges (`4K Ultra HD`, `1080p HD`, `OTT Stream`, `Free-to-Air`).
+- Support region-specific filtering (MENA, UK, USA, Spain, Germany, France, Global).
+- Direct users to verified official applications or websites.
+
+---
+
+## 7. Testing & Verification
+- Unit & Architecture Tests: Run `./gradlew testDebugUnitTest` or `gradle :app:testDebugUnitTest`.
+- Verification of Compose UI rendering with Robolectric JVM tests.
