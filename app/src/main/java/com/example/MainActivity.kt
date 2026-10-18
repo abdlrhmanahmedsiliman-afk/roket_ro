@@ -16,6 +16,10 @@ import com.example.data.local.RoketRoDatabase
 import com.example.service.GeminiAiService
 import com.example.service.PreferencesManager
 import com.example.service.SportsRepository
+import com.example.service.AuthManager
+import com.example.service.FavoritesLiveWorker
+import com.example.service.NotificationCenter
+import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.MainShellScreen
 import com.example.ui.screens.SplashScreen
 import com.example.ui.theme.AppColors
@@ -25,6 +29,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var sportsRepository: SportsRepository
     private lateinit var geminiAiService: GeminiAiService
+    private lateinit var authManager: AuthManager
+    private lateinit var notificationCenter: NotificationCenter
+    private lateinit var favoritesWorker: FavoritesLiveWorker
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +41,12 @@ class MainActivity : ComponentActivity() {
         preferencesManager = PreferencesManager(applicationContext)
         sportsRepository = SportsRepository(database.matchDao(), database.rosterDao(), preferencesManager, lifecycleScope, applicationContext)
         geminiAiService = GeminiAiService()
+        authManager = AuthManager(applicationContext)
+        notificationCenter = NotificationCenter()
+
+        // Start background live match and goals tracking
+        favoritesWorker = FavoritesLiveWorker(sportsRepository, preferencesManager, notificationCenter, lifecycleScope)
+        favoritesWorker.startTracking()
 
         setContent {
             MyApplicationTheme {
@@ -44,18 +57,31 @@ class MainActivity : ComponentActivity() {
                         color = AppColors.Bg
                     ) {
                         var showSplash by remember { mutableStateOf(true) }
+                        val userProfile by authManager.userProfile.collectAsState()
+                        var showLogin by remember { mutableStateOf(!userProfile.isOnboarded) }
 
-                        Crossfade(targetState = showSplash, label = "splash_transition") { isSplash ->
-                            if (isSplash) {
-                                SplashScreen(
-                                    onSplashFinished = { showSplash = false }
-                                )
-                            } else {
-                                MainShellScreen(
-                                    repository = sportsRepository,
-                                    preferencesManager = preferencesManager,
-                                    aiService = geminiAiService
-                                )
+                        Crossfade(targetState = showSplash to showLogin, label = "main_nav_transition") { (isSplash, isLogin) ->
+                            when {
+                                isSplash -> {
+                                    SplashScreen(
+                                        onSplashFinished = { showSplash = false }
+                                    )
+                                }
+                                isLogin -> {
+                                    LoginScreen(
+                                        authManager = authManager,
+                                        onLoginSuccess = { showLogin = false }
+                                    )
+                                }
+                                else -> {
+                                    MainShellScreen(
+                                        repository = sportsRepository,
+                                        preferencesManager = preferencesManager,
+                                        aiService = geminiAiService,
+                                        authManager = authManager,
+                                        notificationCenter = notificationCenter
+                                    )
+                                }
                             }
                         }
                     }

@@ -43,6 +43,8 @@ fun MainShellScreen(
     repository: SportsRepository,
     preferencesManager: PreferencesManager,
     aiService: GeminiAiService,
+    authManager: com.example.service.AuthManager? = null,
+    notificationCenter: com.example.service.NotificationCenter? = null,
     modifier: Modifier = Modifier
 ) {
     var currentSection by remember { mutableStateOf(MainNavSection.MATCHES) }
@@ -55,6 +57,7 @@ fun MainShellScreen(
     val isLoading by repository.isLoading.collectAsState()
     val refreshNotification by repository.refreshNotification.collectAsState()
     val connectionQuality by repository.connectionMonitor?.quality?.collectAsState() ?: remember { mutableStateOf(null) }
+    val unreadNotifsCount by notificationCenter?.unreadCount?.collectAsState() ?: remember { mutableIntStateOf(2) }
 
     // Sub-screens conditional rendering
     if (selectedMatch != null) {
@@ -201,14 +204,23 @@ fun MainShellScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            // Unread indicator dot
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .align(Alignment.TopEnd)
-                                    .clip(CircleShape)
-                                    .background(AppColors.NeonRed)
-                            )
+                            if (unreadNotifsCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .align(Alignment.TopEnd)
+                                        .clip(CircleShape)
+                                        .background(AppColors.NeonRed),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$unreadNotifsCount",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(4.dp))
@@ -309,6 +321,7 @@ fun MainShellScreen(
                     MainNavSection.PROFILE -> {
                         ProfileTab(
                             preferencesManager = preferencesManager,
+                            authManager = authManager,
                             onOpenAiChat = { isAiAssistantOpen = true }
                         )
                     }
@@ -326,6 +339,7 @@ fun MainShellScreen(
 
         if (showNotificationsDialog) {
             NotificationsCenterDialog(
+                notificationCenter = notificationCenter,
                 onDismiss = { showNotificationsDialog = false }
             )
         }
@@ -384,49 +398,69 @@ fun MainBottomNavItem(
 }
 
 @Composable
-fun NotificationsCenterDialog(onDismiss: () -> Unit) {
-    val sampleNotifications = listOf(
-        Triple("⚽ هدف مباشر!", "سجل فينيسيوس جونيور الهدف الثاني لـ ريال مدريد (د68')", AppColors.NeonCyan),
-        Triple("⏱️ بداية الشوط الثاني", "انطلقت أحداث الشوط الثاني لمباراة الهلال والاتحاد", AppColors.NeonBlue),
-        Triple("🔴 بطاقة حمراء", "طرد مباشر لمدافع الفريق المنافس بعد تدخل قوي", AppColors.NeonRed),
-        Triple("🔔 تذكير بمباراة قمة", "تنطلق بعد 30 دقيقة قمة ليفربول ومانشستر سيتي في البريميرليج", AppColors.Coral)
-    )
+fun NotificationsCenterDialog(
+    notificationCenter: com.example.service.NotificationCenter? = null,
+    onDismiss: () -> Unit
+) {
+    val liveNotifs by notificationCenter?.notifications?.collectAsState() ?: remember {
+        mutableStateOf(emptyList())
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = AppColors.BgElevated,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.NotificationsActive,
-                    contentDescription = null,
-                    tint = AppColors.NeonCyan,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "مركز الإشعارات الحية",
-                    color = Color.White,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Black
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.NotificationsActive,
+                        contentDescription = null,
+                        tint = AppColors.NeonCyan,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "مركز الإشعارات الحية",
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+                if (liveNotifs.isNotEmpty()) {
+                    TextButton(onClick = { notificationCenter?.markAllAsRead() }) {
+                        Text("قراءة الكل", color = AppColors.NeonCyan, fontSize = 11.sp)
+                    }
+                }
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                sampleNotifications.forEach { (title, desc, color) ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(AppColors.Surface)
-                            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Text(text = title, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(text = desc, color = AppColors.TextPrimary, fontSize = 11.sp, lineHeight = 16.sp)
+            if (liveNotifs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("لا توجد إشعارات حالياً", color = AppColors.TextMuted, fontSize = 12.sp)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    liveNotifs.take(5).forEach { item ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(AppColors.Surface)
+                                .border(1.dp, item.accentColor.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            Column {
+                                Text(text = item.title, color = item.accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(text = item.message, color = AppColors.TextPrimary, fontSize = 11.sp, lineHeight = 16.sp)
+                            }
                         }
                     }
                 }

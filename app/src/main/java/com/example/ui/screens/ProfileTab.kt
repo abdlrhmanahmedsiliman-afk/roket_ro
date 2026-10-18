@@ -32,10 +32,14 @@ import com.example.ui.theme.AppColors
 @Composable
 fun ProfileTab(
     preferencesManager: PreferencesManager,
+    authManager: com.example.service.AuthManager? = null,
     onOpenAiChat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val favoriteTeams by preferencesManager.favoriteTeams.collectAsState()
+    val userProfile by authManager?.userProfile?.collectAsState() ?: remember {
+        mutableStateOf(com.example.service.UserProfile())
+    }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var soundAlertsEnabled by remember { mutableStateOf(true) }
     var sensor3dEnabled by remember { mutableStateOf(true) }
@@ -54,61 +58,94 @@ fun ProfileTab(
                     colors = listOf(AppColors.NeonBlue.copy(alpha = 0.5f), AppColors.NeonCyan.copy(alpha = 0.2f))
                 )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(62.dp)
-                            .clip(CircleShape)
-                            .background(AppColors.NeonGradient)
-                            .border(2.dp, Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = "User Avatar",
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "مستخدم roket_ro",
-                                color = Color.White,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Black
+                        Box(
+                            modifier = Modifier
+                                .size(62.dp)
+                                .clip(CircleShape)
+                                .background(AppColors.NeonGradient)
+                                .border(2.dp, Color.White, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = "User Avatar",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(AppColors.NeonCyan.copy(alpha = 0.2f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "PRO VIP",
-                                    color = AppColors.NeonCyan,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
 
-                        Text(
-                            text = "تفضيلاتك محفوظة محلياً • بدون تسجيل دخول",
-                            color = AppColors.TextMuted,
-                            fontSize = 11.sp
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = userProfile.displayName,
+                                    color = Color.White,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AppColors.NeonCyan.copy(alpha = 0.2f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (userProfile.isGoogleUser) "GOOGLE VERIFIED" else "PRO VIP",
+                                        color = AppColors.NeonCyan,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = userProfile.email,
+                                color = AppColors.TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (!userProfile.isGoogleUser) {
+                        Button(
+                            onClick = {
+                                authManager?.signInWithGoogle("مستخدم Google الرسمي", "user@gmail.com")
+                            },
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AccountCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4285F4),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ربط الحساب عبر Google", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { authManager?.signOut() },
+                            modifier = Modifier.fillMaxWidth().height(38.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("تسجيل الخروج", color = AppColors.NeonRed, fontSize = 11.sp)
+                        }
                     }
                 }
             }
