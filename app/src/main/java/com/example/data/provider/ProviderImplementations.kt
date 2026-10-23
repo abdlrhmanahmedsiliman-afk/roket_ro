@@ -100,8 +100,70 @@ class EspnApiProvider : SportsApiProvider {
             Result.failure(e)
         }
     }
-    override suspend fun fetchMatchDetails(matchId: String): Result<Match?> = Result.success(null)
-    override suspend fun fetchLeagues(): Result<List<League>> = Result.success(emptyList())
+    override suspend fun fetchMatchDetails(matchId: String): Result<Match?> {
+        return try {
+            val detailed = apiClient.fetchMatchSummary(matchId)
+            if (detailed != null) {
+                circuitBreaker.recordSuccess()
+                val m = Match(
+                    id = matchId,
+                    sport = SportType.FOOTBALL.id,
+                    league = "دوري النخبة",
+                    country = "",
+                    homeTeam = "",
+                    awayTeam = "",
+                    homeLineup = detailed.homeLineup,
+                    awayLineup = detailed.awayLineup,
+                    events = detailed.events,
+                    stats = detailed.stats ?: MatchStats(),
+                    venue = detailed.venue,
+                    referee = detailed.referee
+                )
+                Result.success(m)
+            } else {
+                Result.success(null)
+            }
+        } catch (e: Exception) {
+            circuitBreaker.recordFailure()
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun fetchLeagues(): Result<List<League>> {
+        return try {
+            val plStandings = apiClient.fetchStandings("eng.1")
+            val laligaStandings = apiClient.fetchStandings("esp.1")
+            val splStandings = apiClient.fetchStandings("sau.1")
+            val uclStandings = apiClient.fetchStandings("uefa.champions")
+            val serieAStandings = apiClient.fetchStandings("ita.1")
+            val bundesligaStandings = apiClient.fetchStandings("ger.1")
+
+            val leaguesList = mutableListOf<League>()
+            if (plStandings.isNotEmpty()) {
+                leaguesList.add(League("pl", "الدوري الإنجليزي الممتاز (Premier League)", "إنجلترا", "football", LeagueTier.TIER_1_ELITE, standings = plStandings))
+            }
+            if (laligaStandings.isNotEmpty()) {
+                leaguesList.add(League("laliga", "الدوري الإسباني (LaLiga EA Sports)", "إسبانيا", "football", LeagueTier.TIER_1_ELITE, standings = laligaStandings))
+            }
+            if (splStandings.isNotEmpty()) {
+                leaguesList.add(League("spl", "دوري روشن السعودي للمحترفين (SPL)", "السعودية", "football", LeagueTier.TIER_1_ELITE, standings = splStandings))
+            }
+            if (uclStandings.isNotEmpty()) {
+                leaguesList.add(League("ucl", "دوري أبطال أوروبا (UCL)", "أوروبا", "football", LeagueTier.TIER_1_ELITE, standings = uclStandings))
+            }
+            if (serieAStandings.isNotEmpty()) {
+                leaguesList.add(League("seriea", "الدوري الإيطالي (Serie A)", "إيطاليا", "football", LeagueTier.TIER_1_ELITE, standings = serieAStandings))
+            }
+            if (bundesligaStandings.isNotEmpty()) {
+                leaguesList.add(League("bundesliga", "الدوري الألماني (Bundesliga)", "ألمانيا", "football", LeagueTier.TIER_1_ELITE, standings = bundesligaStandings))
+            }
+            circuitBreaker.recordSuccess()
+            Result.success(leaguesList)
+        } catch (e: Exception) {
+            circuitBreaker.recordFailure()
+            Result.failure(e)
+        }
+    }
     override suspend fun fetchPlayerConditions(matchId: String): Result<List<PlayerCondition>> = Result.success(emptyList())
 }
 

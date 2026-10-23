@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,9 +27,10 @@ fun StatComparisonRow(
     awayRatio: Float,
     modifier: Modifier = Modifier
 ) {
-    val total = (homeRatio + awayRatio).coerceAtLeast(0.001f)
-    val hNorm = (homeRatio / total).coerceIn(0.05f, 0.95f)
-    val aNorm = (awayRatio / total).coerceIn(0.05f, 0.95f)
+    val isAvailable = homeValueStr != "غير متاح" && awayValueStr != "غير متاح" && (homeRatio > 0f || awayRatio > 0f)
+    val total = if (isAvailable) (homeRatio + awayRatio).coerceAtLeast(0.001f) else 1f
+    val hNorm = if (isAvailable) (homeRatio / total).coerceIn(0.05f, 0.95f) else 0.5f
+    val aNorm = if (isAvailable) (awayRatio / total).coerceIn(0.05f, 0.95f) else 0.5f
 
     val animH by animateFloatAsState(targetValue = hNorm, animationSpec = tween(600), label = "hStat")
     val animA by animateFloatAsState(targetValue = aNorm, animationSpec = tween(600), label = "aStat")
@@ -45,10 +47,10 @@ fun StatComparisonRow(
         ) {
             Text(
                 text = homeValueStr,
-                color = AppColors.NeonBlue,
+                color = if (isAvailable) AppColors.NeonBlue else AppColors.TextMuted,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.width(54.dp),
                 textAlign = TextAlign.Start
             )
             Text(
@@ -60,10 +62,10 @@ fun StatComparisonRow(
             )
             Text(
                 text = awayValueStr,
-                color = AppColors.Coral,
+                color = if (isAvailable) AppColors.Coral else AppColors.TextMuted,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.width(54.dp),
                 textAlign = TextAlign.End
             )
         }
@@ -77,19 +79,27 @@ fun StatComparisonRow(
                 .clip(RoundedCornerShape(3.dp))
                 .background(AppColors.SurfaceSoft)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(animH)
-                    .background(AppColors.NeonBlue)
-            )
-            Spacer(modifier = Modifier.width(2.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(animA)
-                    .background(AppColors.Coral)
-            )
+            if (isAvailable) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(animH)
+                        .background(AppColors.NeonBlue)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(animA)
+                        .background(AppColors.Coral)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.08f))
+                )
+            }
         }
     }
 }

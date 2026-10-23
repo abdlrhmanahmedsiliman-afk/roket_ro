@@ -12,8 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Match
 import com.example.ui.components.MatchCard
+import com.example.ui.components.TeamHubDialog
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -33,6 +33,7 @@ fun LiveTab(
     onToggleFavorite: (Match) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var selectedTeamForDialog by remember { mutableStateOf<String?>(null) }
     val liveMatches = matches.filter { it.isLive }
 
     val infiniteTransition = rememberInfiniteTransition(label = "live_pulse")
@@ -138,9 +139,19 @@ fun LiveTab(
                 MatchCard(
                     match = match,
                     onClick = { onMatchClick(match) },
-                    onToggleFavorite = { onToggleFavorite(match) }
+                    onToggleFavorite = { onToggleFavorite(match) },
+                    onTeamClick = { selectedTeamForDialog = it }
                 )
             }
         }
+    }
+
+    val teamToView = selectedTeamForDialog
+    if (teamToView != null) {
+        TeamHubDialog(
+            teamName = teamToView,
+            onDismiss = { selectedTeamForDialog = null },
+            onPlayerClick = { }
+        )
     }
 }

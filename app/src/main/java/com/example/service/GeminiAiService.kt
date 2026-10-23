@@ -96,15 +96,34 @@ class GeminiAiService {
         generateSmartLocalAnswer(question, currentMatches)
     }
 
+    // Cache and rate limiting per match
+    private val analysisCache = mutableMapOf<String, Pair<String, Long>>() // version -> (text, timestamp)
+    private val lastCallTime = mutableMapOf<String, Long>() // matchId -> timestamp
+
     suspend fun generateDeepMatchAnalysis(match: Match, phase: String): String = withContext(Dispatchers.IO) {
-        val prompt = when (phase) {
-            "live" -> "رصد تكتيكي لحظي لمباراة ${match.homeTeam} ضد ${match.awayTeam} (${match.homeScore}-${match.awayScore} د${match.minute})."
-            "post" -> "تقرير شامل بعد مباراة ${match.homeTeam} ${match.homeScore}-${match.awayScore} ${match.awayTeam} في ${match.league}."
-            else -> "تحليل تكتيكي وإحصائي قبل قمة ${match.homeTeam} ضد ${match.awayTeam} في ${match.league}."
+        val verifiedContext = MatchContextBuilder.buildContext(match, phase)
+        val cacheKey = "${match.id}_${phase}_${verifiedContext.contextVersion}"
+
+        // 1. Check cache first
+        val cached = analysisCache[cacheKey]
+        if (cached != null) {
+            return@withContext cached.first
         }
 
-        val aiResponse = askAssistant(prompt, listOf(match))
-        if (aiResponse.isNotBlank() && !aiResponse.contains("لم يتم العثور")) return@withContext aiResponse
+        // 2. Rate limiting check (minimum 15s between AI calls for the same match)
+        val now = System.currentTimeMillis()
+        val lastTime = lastCallTime[match.id] ?: 0L
+        if (now - lastTime < 15_000L && analysisCache.isNotEmpty()) {
+            val lastCached = analysisCache.entries.lastOrNull { it.key.startsWith(match.id) }
+            if (lastCached != null) return@withContext lastCached.value.first
+        }
+        lastCallTime[match.id] = now
+
+        val aiResponse = askAssistant(verifiedContext.promptContext, listOf(match))
+        if (aiResponse.isNotBlank() && !aiResponse.contains("لم يتم العثور")) {
+            analysisCache[cacheKey] = aiResponse to now
+            return@withContext aiResponse
+        }
 
         val highRiskCardPlayer = if (match.stats.foulsHome > match.stats.foulsAway) "${match.homeTeam} (محور الارتكاز)" else "${match.awayTeam} (قلب الدفاع)"
         val predictedFirstScorer = if (match.homeLineup?.starters?.isNotEmpty() == true) match.homeLineup.starters.find { it.position == "ST" || it.position == "LW" }?.name ?: "مهاجم الفريق" else "رأس الحربة"

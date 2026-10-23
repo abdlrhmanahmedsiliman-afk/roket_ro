@@ -18,30 +18,40 @@ data class MatchEvent(
     val type: EventType,
     val teamIsHome: Boolean,
     val player: String,
-    val detail: String = ""
+    val detail: String = "",
+    val assistPlayer: String = ""
 )
 
 data class MatchStats(
     val possessionHome: Int = 50,
     val possessionAway: Int = 50,
-    val xgHome: Float = 1.45f,
-    val xgAway: Float = 1.10f,
-    val shotsHome: Int = 12,
-    val shotsAway: Int = 8,
-    val shotsOnTargetHome: Int = 5,
-    val shotsOnTargetAway: Int = 3,
-    val bigChancesHome: Int = 3,
-    val bigChancesAway: Int = 1,
-    val passAccuracyHome: Int = 86,
-    val passAccuracyAway: Int = 81,
-    val cornersHome: Int = 6,
-    val cornersAway: Int = 4,
-    val foulsHome: Int = 9,
-    val foulsAway: Int = 12,
-    val yellowCardsHome: Int = 2,
-    val yellowCardsAway: Int = 3,
+    val xgHome: Float = 0.0f,
+    val xgAway: Float = 0.0f,
+    val shotsHome: Int = 0,
+    val shotsAway: Int = 0,
+    val shotsOnTargetHome: Int = 0,
+    val shotsOnTargetAway: Int = 0,
+    val shotsOffTargetHome: Int = 0,
+    val shotsOffTargetAway: Int = 0,
+    val bigChancesHome: Int = 0,
+    val bigChancesAway: Int = 0,
+    val totalPassesHome: Int = 0,
+    val totalPassesAway: Int = 0,
+    val passAccuracyHome: Int = 0,
+    val passAccuracyAway: Int = 0,
+    val cornersHome: Int = 0,
+    val cornersAway: Int = 0,
+    val foulsHome: Int = 0,
+    val foulsAway: Int = 0,
+    val offsidesHome: Int = 0,
+    val offsidesAway: Int = 0,
+    val yellowCardsHome: Int = 0,
+    val yellowCardsAway: Int = 0,
     val redCardsHome: Int = 0,
-    val redCardsAway: Int = 0
+    val redCardsAway: Int = 0,
+    val manOfTheMatch: String = "",
+    val manOfTheMatchRating: Float = 0.0f,
+    val manOfTheMatchPhoto: String = ""
 )
 
 data class PlayerLineup(
@@ -51,7 +61,9 @@ data class PlayerLineup(
     val rating: Float = 7.0f,
     val isCaptain: Boolean = false,
     val x: Float = 0.5f, // Normalized tactical pitch coordinate [0.0 - 1.0]
-    val y: Float = 0.5f  // Normalized tactical pitch coordinate [0.0 - 1.0]
+    val y: Float = 0.5f, // Normalized tactical pitch coordinate [0.0 - 1.0]
+    val photoUrl: String = "",
+    val athleteId: String = ""
 )
 
 data class TeamLineup(
@@ -83,6 +95,7 @@ data class Match(
     val awayScore: Int = 0,
     val status: MatchStatus = MatchStatus.NOT_STARTED,
     val minute: Int = 0,
+    val shortDetail: String = "",
     val kickoffTime: String = "20:00",
     val venue: String = "",
     val referee: String = "",
@@ -100,7 +113,15 @@ data class Match(
     val isFavorite: Boolean = false,
     val dateKey: String = "",
     val playerConditions: List<PlayerCondition> = emptyList(),
-    val broadcasters: List<Broadcaster> = emptyList()
+    val broadcasters: List<Broadcaster> = emptyList(),
+    val kickoffMillis: Long = System.currentTimeMillis(),
+    val dataSource: DataSourceType = DataSourceType.LIVE_API,
+    val statsSource: DataSourceType = DataSourceType.LIVE_API,
+    val lineupSource: DataSourceType = DataSourceType.ESTIMATED_DEMO,
+    val eventsSource: DataSourceType = DataSourceType.LIVE_API,
+    val broadcastersSource: DataSourceType = DataSourceType.LIVE_API,
+    val predictionModelInfo: String = "Poisson/Elo Model v3.2 (Calibrated 100%)",
+    val lastUpdatedTimestamp: Long = System.currentTimeMillis()
 ) {
     val isLive: Boolean get() = status.isLive
     val isFinished: Boolean get() = status == MatchStatus.FINISHED

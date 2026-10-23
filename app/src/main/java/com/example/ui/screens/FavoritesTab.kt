@@ -15,7 +15,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Match
 import com.example.ui.components.MatchCard
+import com.example.ui.components.TeamHubDialog
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -36,6 +37,8 @@ fun FavoritesTab(
     onToggleFavoriteMatch: (Match) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var selectedTeamForDialog by remember { mutableStateOf<String?>(null) }
+
     val favoriteMatches = matches.filter { match ->
         match.isFavorite || favoriteTeams.contains(match.homeTeam) || favoriteTeams.contains(match.awayTeam)
     }
@@ -103,7 +106,7 @@ fun FavoritesTab(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(AppColors.NeonRed.copy(alpha = 0.15f))
                                 .border(1.dp, AppColors.NeonRed.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                                .clickable { onToggleFavoriteTeam(team) }
+                                .clickable { selectedTeamForDialog = team }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -120,12 +123,14 @@ fun FavoritesTab(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Remove",
                                 tint = AppColors.TextMuted,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clickable { onToggleFavoriteTeam(team) }
                             )
                         }
                     }
@@ -182,9 +187,19 @@ fun FavoritesTab(
                 MatchCard(
                     match = match,
                     onClick = { onMatchClick(match) },
-                    onToggleFavorite = { onToggleFavoriteMatch(match) }
+                    onToggleFavorite = { onToggleFavoriteMatch(match) },
+                    onTeamClick = { selectedTeamForDialog = it }
                 )
             }
         }
+    }
+
+    val teamToView = selectedTeamForDialog
+    if (teamToView != null) {
+        TeamHubDialog(
+            teamName = teamToView,
+            onDismiss = { selectedTeamForDialog = null },
+            onPlayerClick = { }
+        )
     }
 }

@@ -24,7 +24,9 @@ fun ProbabilityBar(
     awayTeam: String,
     homeProb: Double,
     drawProb: Double,
-    awayProb: Double,
+    awayProb: Double = 0.0,
+    source: com.example.model.DataSourceType = com.example.model.DataSourceType.LIVE_API,
+    modelInfo: String? = null,
     modifier: Modifier = Modifier
 ) {
     val total = (homeProb + drawProb + awayProb).coerceAtLeast(1.0)
@@ -99,6 +101,32 @@ fun ProbabilityBar(
                         .fillMaxHeight()
                         .weight(animA)
                         .background(AppColors.Coral)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = modelInfo ?: "تقدير احتمالي (نموذج إحصائي ELO والتصنيف الرياضي)",
+                color = AppColors.TextMuted,
+                fontSize = 9.sp
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AppColors.NeonBlue.copy(alpha = 0.15f))
+                    .padding(horizontal = 4.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    text = "تقدير",
+                    color = AppColors.NeonBlue,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

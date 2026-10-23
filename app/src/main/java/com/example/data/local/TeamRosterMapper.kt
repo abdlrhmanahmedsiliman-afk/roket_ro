@@ -11,7 +11,7 @@ object TeamRosterMapper {
 
     fun serializePlayers(players: List<PlayerLineup>): String {
         return players.joinToString(";;") { player ->
-            "${player.number}::${player.name}::${player.position}::${player.rating}::${player.isCaptain}::${player.x}::${player.y}"
+            "${player.number}::${player.name}::${player.position}::${player.rating}::${player.isCaptain}::${player.x}::${player.y}::${player.photoUrl}::${player.athleteId}"
         }
     }
 
@@ -28,7 +28,9 @@ object TeamRosterMapper {
                         rating = tokens[3].toFloatOrNull() ?: 7.0f,
                         isCaptain = tokens[4].toBooleanStrictOrNull() ?: false,
                         x = tokens[5].toFloatOrNull() ?: 0.5f,
-                        y = tokens[6].toFloatOrNull() ?: 0.5f
+                        y = tokens[6].toFloatOrNull() ?: 0.5f,
+                        photoUrl = if (tokens.size > 7 && tokens[7].isNotBlank() && !tokens[7].contains("espncdn")) tokens[7] else com.example.data.provider.PlayerDatabaseProvider.getPlayerPhoto(tokens[1]),
+                        athleteId = if (tokens.size > 8) tokens[8] else ""
                     )
                 } else null
             }

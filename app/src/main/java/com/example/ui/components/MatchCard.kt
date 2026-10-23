@@ -36,6 +36,7 @@ fun MatchCard(
     match: Match,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onTeamClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     GlassCard(
@@ -73,7 +74,7 @@ fun MatchCard(
                     modifier = Modifier.weight(1f)
                 )
 
-                StatusBadge(status = match.status, minute = match.minute)
+                StatusBadge(status = match.status, minute = match.minute, shortDetail = match.shortDetail)
 
                 Spacer(modifier = Modifier.width(6.dp))
 
@@ -102,7 +103,8 @@ fun MatchCard(
                     name = match.homeTeam,
                     logo = match.homeLogo,
                     modifier = Modifier.weight(1f),
-                    isHome = true
+                    isHome = true,
+                    onTeamClick = onTeamClick
                 )
 
                 // Score / Kickoff
@@ -130,8 +132,15 @@ fun MatchCard(
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp
                         )
+                        val timeLabel = when {
+                            match.status == MatchStatus.HALF_TIME -> "استراحة"
+                            match.status == MatchStatus.FINISHED -> "انتهت"
+                            match.shortDetail.isNotBlank() -> match.shortDetail
+                            match.isLive -> "${match.minute}'"
+                            else -> match.status.labelAr
+                        }
                         Text(
-                            text = if (match.isLive) "${match.minute}'" else match.status.labelAr,
+                            text = timeLabel,
                             color = if (match.isLive) AppColors.NeonRed else AppColors.TextMuted,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -144,7 +153,8 @@ fun MatchCard(
                     name = match.awayTeam,
                     logo = match.awayLogo,
                     modifier = Modifier.weight(1f),
-                    isHome = false
+                    isHome = false,
+                    onTeamClick = onTeamClick
                 )
             }
 
@@ -198,10 +208,16 @@ private fun TeamColumn(
     name: String,
     logo: String,
     isHome: Boolean,
+    onTeamClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
+        modifier = if (onTeamClick != null) {
+            modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onTeamClick(name) }
+                .padding(4.dp)
+        } else modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -243,13 +259,18 @@ private fun TeamColumn(
 }
 
 @Composable
-fun StatusBadge(status: MatchStatus, minute: Int) {
+fun StatusBadge(status: MatchStatus, minute: Int, shortDetail: String = "") {
+    val liveText = when {
+        shortDetail.isNotBlank() && (shortDetail.contains("'") || shortDetail.contains("+")) -> "مباشر • $shortDetail"
+        minute > 0 -> "مباشر • $minute'"
+        else -> "مباشر"
+    }
     val (badgeColor, label) = when (status) {
-        MatchStatus.LIVE -> AppColors.NeonRed to "مباشر • $minute'"
-        MatchStatus.HALF_TIME -> AppColors.Warning to "استراحة"
-        MatchStatus.EXTRA_TIME -> AppColors.NeonPurple to "إضافي • $minute'"
+        MatchStatus.LIVE -> AppColors.NeonRed to liveText
+        MatchStatus.HALF_TIME -> AppColors.Warning to (if (shortDetail.isNotBlank()) shortDetail else "استراحة")
+        MatchStatus.EXTRA_TIME -> AppColors.NeonPurple to (if (shortDetail.isNotBlank()) shortDetail else "إضافي • $minute'")
         MatchStatus.PENALTIES -> AppColors.Coral to "ركلات ترجيح"
-        MatchStatus.FINISHED -> AppColors.TextMuted to "انتهت"
+        MatchStatus.FINISHED -> AppColors.TextMuted to (if (shortDetail.isNotBlank() && shortDetail != "FT") shortDetail else "انتهت")
         MatchStatus.NOT_STARTED -> AppColors.NeonBlue to "قريباً"
     }
 

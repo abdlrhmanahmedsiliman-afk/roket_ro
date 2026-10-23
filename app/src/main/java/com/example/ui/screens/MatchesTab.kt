@@ -29,8 +29,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.core.performance.ShimmerMatchCard
 import com.example.model.Match
+import com.example.model.MatchStatus
 import com.example.model.SportType
+import com.example.model.SportsNewsArticle
 import com.example.ui.components.MatchCard
+import com.example.ui.components.TeamHubDialog
 import com.example.ui.theme.AppColors
 import java.util.Calendar
 import java.util.Locale
@@ -53,11 +56,13 @@ fun MatchesTab(
     onMatchClick: (Match) -> Unit,
     onToggleFavorite: (Match) -> Unit,
     refreshNotification: String? = null,
+    news: List<SportsNewsArticle> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var selectedSport by remember { mutableStateOf("all") }
+    var selectedTeamForDialog by remember { mutableStateOf<String?>(null) }
 
     // Generate 30 days for Global Calendar (Yesterday, Today, and the next 28 days)
     val calendarDays = remember {
@@ -94,18 +99,45 @@ fun MatchesTab(
     var selectedDayIndex by remember { mutableIntStateOf(1) } // Default to Today (index 1)
     val calendarScrollState = rememberLazyListState()
 
-    // Filter matches based on search, sport, and selected calendar day
-    val filteredMatches = remember(matches, searchQuery, selectedSport, selectedDayIndex) {
+    var isLiveOnly by remember { mutableStateOf(false) }
+
+    val liveCount = remember(matches) {
+        matches.count { it.isLive || it.status == MatchStatus.LIVE || it.status == MatchStatus.HALF_TIME }
+    }
+
+    // Filter matches based on search, sport, live-only switch, and selected calendar day
+    val filteredMatches = remember(matches, searchQuery, selectedSport, selectedDayIndex, isLiveOnly) {
         val selectedDay = calendarDays.getOrNull(selectedDayIndex)
         matches.filter { match ->
-            val matchesSport = selectedSport == "all" || match.sport == selectedSport
+            // 1. Live Filter (when button is toggled ON: show only live; when OFF: show all online & offline)
+            val matchesLive = if (isLiveOnly) {
+                match.isLive || match.status == MatchStatus.LIVE || match.status == MatchStatus.HALF_TIME
+            } else {
+                true // Shows all matches: offline (finished, upcoming) and online (live)
+            }
+
+            // 2. Strict Sport Filter
+            val matchesSport = when (selectedSport.lowercase()) {
+                "all" -> true
+                "football" -> match.sport.lowercase() in listOf("football", "soccer", "sports_soccer")
+                "basketball" -> match.sport.lowercase() in listOf("basketball", "nba", "sports_basketball")
+                "tennis" -> match.sport.lowercase() in listOf("tennis", "wimbledon", "sports_tennis", "atp", "wta")
+                "formula-1", "f1" -> match.sport.lowercase() in listOf("formula-1", "f1", "motorsport")
+                "cricket" -> match.sport.lowercase() in listOf("cricket", "sports_cricket")
+                "mma" -> match.sport.lowercase() in listOf("mma", "ufc")
+                else -> match.sport.equals(selectedSport, ignoreCase = true)
+            }
+
+            // 3. Search Filter
             val matchesSearch = searchQuery.isBlank() ||
                     match.homeTeam.contains(searchQuery, ignoreCase = true) ||
                     match.awayTeam.contains(searchQuery, ignoreCase = true) ||
                     match.league.contains(searchQuery, ignoreCase = true)
 
-            // When user picks a date, show matching live/scheduled matches
-            val matchesDay = if (selectedDay != null && match.dateKey.isNotBlank()) {
+            // 4. Calendar Day Filter (bypassed if user is filtering strictly for Live)
+            val matchesDay = if (isLiveOnly) {
+                true
+            } else if (selectedDay != null && match.dateKey.isNotBlank()) {
                 if (selectedDay.isToday) {
                     match.dateKey == selectedDay.dateKey || match.isLive
                 } else {
@@ -119,7 +151,7 @@ fun MatchesTab(
                 !match.isFinished // Future dates show upcoming scheduled fixtures
             }
 
-            matchesSport && matchesSearch && matchesDay
+            matchesLive && matchesSport && matchesSearch && matchesDay
         }
     }
 
@@ -192,7 +224,7 @@ fun MatchesTab(
                                     .border(1.dp, AppColors.NeonRed.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
                                     .padding(horizontal = 5.dp, vertical = 2.dp)
                             ) {
-                                Text("LIVE 60FPS", color = AppColors.NeonRed, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                                Text("مباشر", color = AppColors.NeonRed, fontSize = 9.sp, fontWeight = FontWeight.Black)
                             }
                         }
                         Text(
@@ -347,6 +379,103 @@ fun MatchesTab(
                 }
             }
 
+            // Match Status Segment: [جميع المباريات (أوفلاين وأونلاين)] vs [🔴 مباشر الآن (LIVE)]
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Option 1: All Matches (Online & Offline)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (!isLiveOnly) AppColors.NeonBlue.copy(alpha = 0.22f) else AppColors.Surface)
+                            .border(
+                                width = 1.dp,
+                                color = if (!isLiveOnly) AppColors.NeonBlue else Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { isLiveOnly = false }
+                            .padding(vertical = 8.dp, horizontal = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🌐", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "الكل (أونلاين وأوفلاين)",
+                                color = if (!isLiveOnly) Color.White else AppColors.TextSoft,
+                                fontSize = 11.sp,
+                                fontWeight = if (!isLiveOnly) FontWeight.Bold else FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color.White.copy(alpha = 0.10f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "${matches.size}",
+                                    color = if (!isLiveOnly) AppColors.NeonCyan else AppColors.TextMuted,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    // Option 2: LIVE ONLY Button (with pulsating red dot)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isLiveOnly) AppColors.NeonRed.copy(alpha = 0.25f) else AppColors.Surface)
+                            .border(
+                                width = 1.dp,
+                                color = if (isLiveOnly) AppColors.NeonRed else Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { isLiveOnly = true }
+                            .padding(vertical = 8.dp, horizontal = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(AppColors.NeonRed)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "مباشر الآن (LIVE)",
+                                color = if (isLiveOnly) Color.White else AppColors.TextSoft,
+                                fontSize = 11.sp,
+                                fontWeight = if (isLiveOnly) FontWeight.Bold else FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isLiveOnly) AppColors.NeonRed else Color.White.copy(alpha = 0.10f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "$liveCount",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Multi-Sports Horizontal Scrollable Chips Row
             item {
                 LazyRow(
@@ -357,6 +486,14 @@ fun MatchesTab(
                 ) {
                     items(SportType.entries) { sport ->
                         val isSelected = selectedSport == sport.id
+                        val count = when (sport.id) {
+                            "all" -> matches.size
+                            "football" -> matches.count { it.sport.lowercase() in listOf("football", "soccer", "sports_soccer") }
+                            "basketball" -> matches.count { it.sport.lowercase() in listOf("basketball", "nba", "sports_basketball") }
+                            "tennis" -> matches.count { it.sport.lowercase() in listOf("tennis", "wimbledon", "sports_tennis") }
+                            "formula-1" -> matches.count { it.sport.lowercase() in listOf("formula-1", "f1", "motorsport") }
+                            else -> matches.count { it.sport.equals(sport.id, ignoreCase = true) }
+                        }
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
@@ -378,11 +515,112 @@ fun MatchesTab(
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
+                                if (count > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "($count)",
+                                        color = if (isSelected) AppColors.NeonCyan else AppColors.TextMuted,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
+            }
+
+            // Breaking Sports News Live Bar (100% Real Live RSS Feed)
+            if (news.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(AppColors.NeonRed)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "أخبار رياضية عاجلة ومباشرة",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "مباشر من المصادر",
+                                color = AppColors.TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(news.take(10), key = { it.id }) { article ->
+                                Box(
+                                    modifier = Modifier
+                                        .width(280.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(AppColors.Surface)
+                                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                                        .padding(10.dp)
+                                ) {
+                                    Column {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(AppColors.NeonBlue.copy(alpha = 0.15f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = article.source,
+                                                    color = AppColors.NeonBlue,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                text = article.timeAgo,
+                                                color = AppColors.TextMuted,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = article.title,
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 2,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
             }
 
             // Matches List
@@ -421,10 +659,20 @@ fun MatchesTab(
                     MatchCard(
                         match = match,
                         onClick = { onMatchClick(match) },
-                        onToggleFavorite = { onToggleFavorite(match) }
+                        onToggleFavorite = { onToggleFavorite(match) },
+                        onTeamClick = { selectedTeamForDialog = it }
                     )
                 }
             }
         }
+    }
+
+    val teamToView = selectedTeamForDialog
+    if (teamToView != null) {
+        TeamHubDialog(
+            teamName = teamToView,
+            onDismiss = { selectedTeamForDialog = null },
+            onPlayerClick = { }
+        )
     }
 }

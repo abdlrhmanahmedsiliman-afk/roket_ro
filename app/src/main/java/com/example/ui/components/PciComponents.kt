@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.model.PciFactors
 import com.example.model.PciStatus
 import com.example.model.PciTimelinePoint
@@ -415,14 +416,36 @@ fun PlayerConditionCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Condition Ring
-                PlayerConditionRing(
-                    score = playerCondition.overallScore,
-                    status = playerCondition.status,
-                    size = 56.dp,
-                    strokeWidth = 4.5.dp,
-                    showLabel = false
-                )
+                // Condition Ring with Player Avatar
+                Box(
+                    modifier = Modifier.size(56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PlayerConditionRing(
+                        score = playerCondition.overallScore,
+                        status = playerCondition.status,
+                        size = 56.dp,
+                        strokeWidth = 3.5.dp,
+                        showLabel = false
+                    )
+                    if (playerCondition.photoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = playerCondition.photoUrl,
+                            contentDescription = playerCondition.playerName,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = "${playerCondition.overallScore}",
+                            color = playerCondition.status.color,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(12.dp))
 

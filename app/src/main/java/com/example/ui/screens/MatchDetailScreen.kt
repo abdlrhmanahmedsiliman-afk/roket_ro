@@ -33,27 +33,38 @@ import com.example.model.Match
 import com.example.model.MatchEvent
 import com.example.model.PlayerLineup
 import com.example.service.GeminiAiService
+import com.example.service.SportsRepository
 import com.example.ui.components.*
+import com.example.ui.components.TeamHubDialog
 import com.example.ui.theme.AppColors
 import kotlinx.coroutines.launch
 
 @Composable
 fun MatchDetailScreen(
-    match: Match,
+    initialMatch: Match,
     aiService: GeminiAiService,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
+    repository: SportsRepository? = null,
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBack() }
 
     val coroutineScope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(initialMatch.id) {
+        repository?.loadMatchDetails(initialMatch.id)
+    }
+
+    val liveMatches by repository?.matches?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
+    val match = liveMatches.find { it.id == initialMatch.id } ?: initialMatch
     val tabTitles = listOf("ملخص", "الأحداث", "إحصائيات", "تشكيل", "حالة اللاعبين (PCI)", "القنوات الناقلة", "لاعبين H2H", "Heatmap", "المواجهات", "AI Hub")
 
     var selected3DPlayer by remember { mutableStateOf<PlayerLineup?>(null) }
     var selected3DTeamName by remember { mutableStateOf("") }
     var selected3DTeamColor by remember { mutableStateOf(AppColors.NeonBlue) }
+    var selectedTeamForDialog by remember { mutableStateOf<String?>(null) }
 
     var aiReportText by remember { mutableStateOf(match.aiLiveTactical.ifBlank { match.aiPreview }) }
     var isGeneratingAi by remember { mutableStateOf(false) }
@@ -137,8 +148,14 @@ fun MatchDetailScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            // Home Team
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            // Home Team (Clickable to view full club profile)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { selectedTeamForDialog = match.homeTeam }
+                                    .padding(6.dp)
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(54.dp)
@@ -171,11 +188,17 @@ fun MatchDetailScreen(
                                     letterSpacing = 2.sp
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                StatusBadge(status = match.status, minute = match.minute)
+                                StatusBadge(status = match.status, minute = match.minute, shortDetail = match.shortDetail)
                             }
 
-                            // Away Team
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            // Away Team (Clickable to view full club profile)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { selectedTeamForDialog = match.awayTeam }
+                                    .padding(6.dp)
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(54.dp)
@@ -351,15 +374,20 @@ fun MatchDetailScreen(
 
                                 StatComparisonRow("الاستحواذ %", "${match.stats.possessionHome}%", "${match.stats.possessionAway}%", match.stats.possessionHome.toFloat(), match.stats.possessionAway.toFloat())
                                 StatComparisonRow("الأهداف المتوقعة (xG)", "${match.stats.xgHome}", "${match.stats.xgAway}", match.stats.xgHome, match.stats.xgAway)
-                                StatComparisonRow("صناعة الأهداف المتوقعة (xA)", "1.12", "0.85", 1.12f, 0.85f)
                                 StatComparisonRow("إجمالي التسديدات", "${match.stats.shotsHome}", "${match.stats.shotsAway}", match.stats.shotsHome.toFloat(), match.stats.shotsAway.toFloat())
                                 StatComparisonRow("تسديدات على المرمى", "${match.stats.shotsOnTargetHome}", "${match.stats.shotsOnTargetAway}", match.stats.shotsOnTargetHome.toFloat(), match.stats.shotsOnTargetAway.toFloat())
-                                StatComparisonRow("فرص محققة للتسجيل", "${match.stats.bigChancesHome}", "${match.stats.bigChancesAway}", match.stats.bigChancesHome.toFloat(), match.stats.bigChancesAway.toFloat())
-                                StatComparisonRow("معدل ضغط الخصم (PPDA)", "8.4", "11.2", 11.2f, 8.4f)
-                                StatComparisonRow("ميل الملعب الهجومي (Field Tilt)", "56%", "44%", 56f, 44f)
+                                StatComparisonRow("تسديدات خارج المرمى", "${match.stats.shotsOffTargetHome}", "${match.stats.shotsOffTargetAway}", match.stats.shotsOffTargetHome.toFloat(), match.stats.shotsOffTargetAway.toFloat())
+                                StatComparisonRow("إجمالي التمريرات", "${match.stats.totalPassesHome}", "${match.stats.totalPassesAway}", match.stats.totalPassesHome.toFloat(), match.stats.totalPassesAway.toFloat())
                                 StatComparisonRow("دقة التمرير %", "${match.stats.passAccuracyHome}%", "${match.stats.passAccuracyAway}%", match.stats.passAccuracyHome.toFloat(), match.stats.passAccuracyAway.toFloat())
-                                StatComparisonRow("الركنيات", "${match.stats.cornersHome}", "${match.stats.cornersAway}", match.stats.cornersHome.toFloat(), match.stats.cornersAway.toFloat())
+                                StatComparisonRow("الضربات الركنية", "${match.stats.cornersHome}", "${match.stats.cornersAway}", match.stats.cornersHome.toFloat(), match.stats.cornersAway.toFloat())
+                                StatComparisonRow("حالات التسلل", "${match.stats.offsidesHome}", "${match.stats.offsidesAway}", match.stats.offsidesHome.toFloat(), match.stats.offsidesAway.toFloat())
                                 StatComparisonRow("الأخطاء المرتكبة", "${match.stats.foulsHome}", "${match.stats.foulsAway}", match.stats.foulsHome.toFloat(), match.stats.foulsAway.toFloat())
+                                StatComparisonRow("البطاقات الصفراء", "${match.stats.yellowCardsHome}", "${match.stats.yellowCardsAway}", match.stats.yellowCardsHome.toFloat(), match.stats.yellowCardsAway.toFloat())
+                                StatComparisonRow("البطاقات الحمراء", "${match.stats.redCardsHome}", "${match.stats.redCardsAway}", match.stats.redCardsHome.toFloat(), match.stats.redCardsAway.toFloat())
+                                StatComparisonRow("فرص محققة للتسجيل", "${match.stats.bigChancesHome}", "${match.stats.bigChancesAway}", match.stats.bigChancesHome.toFloat(), match.stats.bigChancesAway.toFloat())
+                                StatComparisonRow("صناعة الأهداف المتوقعة (xA)", "غير متاح", "غير متاح", 0f, 0f)
+                                StatComparisonRow("معدل ضغط الخصم (PPDA)", "غير متاح", "غير متاح", 0f, 0f)
+                                StatComparisonRow("ميل الملعب الهجومي (Field Tilt)", "غير متاح", "غير متاح", 0f, 0f)
                             }
                         }
                     }
@@ -367,10 +395,13 @@ fun MatchDetailScreen(
                 3 -> {
                     // Lineups & Tactical Pitch
                     item {
-                        if (match.homeLineup != null && match.awayLineup != null) {
+                        val effectiveHomeLineup = match.homeLineup ?: repository?.createSampleLineup(team = match.homeTeam)
+                        val effectiveAwayLineup = match.awayLineup ?: repository?.createSampleLineup(team = match.awayTeam)
+
+                        if (effectiveHomeLineup != null && effectiveAwayLineup != null) {
                             TacticalPitchView(
-                                homeLineup = match.homeLineup,
-                                awayLineup = match.awayLineup,
+                                homeLineup = effectiveHomeLineup,
+                                awayLineup = effectiveAwayLineup,
                                 homeTeamName = match.homeTeam,
                                 awayTeamName = match.awayTeam,
                                 onPlayerClick = { player, teamName, teamColor ->
@@ -387,7 +418,7 @@ fun MatchDetailScreen(
                                         .padding(32.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("التشكيل الرسمي سيُعلن قبل انطلاق المباراة بساعة", color = AppColors.TextMuted, fontSize = 12.sp)
+                                    Text("جاري استلام التشكيل الرسمي والبيانات التكتيكية...", color = AppColors.TextMuted, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -451,7 +482,8 @@ fun MatchDetailScreen(
                                                     name = pci.playerName,
                                                     position = pci.position,
                                                     rating = (pci.overallScore / 10f).coerceIn(6.0f, 9.9f),
-                                                    isCaptain = false
+                                                    isCaptain = false,
+                                                    photoUrl = pci.photoUrl
                                                 )
                                                 selected3DTeamName = pci.teamName
                                                 selected3DTeamColor = if (pci.teamName == match.homeTeam) AppColors.NeonBlue else AppColors.Coral
@@ -472,24 +504,29 @@ fun MatchDetailScreen(
                 6 -> {
                     // Players & Radar Comparison
                     item {
+                        val homeStar = match.homeLineup?.starters?.maxByOrNull { it.rating }
+                            ?: PlayerLineup(10, match.homeTeam, "FWD", 8.5f)
+                        val awayStar = match.awayLineup?.starters?.maxByOrNull { it.rating }
+                            ?: PlayerLineup(9, match.awayTeam, "FWD", 8.4f)
+
                         RadarChartView(
                             playerA = PlayerRadarStats(
-                                playerName = if (match.homeTeam.contains("مدريد")) "فينيسيوس جونيور" else "محمد صلاح",
-                                pace = 93f,
-                                shooting = 88f,
-                                passing = 84f,
-                                dribbling = 94f,
-                                defense = 38f,
-                                physical = 76f
+                                playerName = "${homeStar.name} (${match.homeTeam})",
+                                pace = (homeStar.rating * 10f + 5).coerceIn(65f, 96f),
+                                shooting = (homeStar.rating * 10.5f).coerceIn(60f, 95f),
+                                passing = (homeStar.rating * 9.8f).coerceIn(60f, 94f),
+                                dribbling = (homeStar.rating * 10.2f).coerceIn(60f, 96f),
+                                defense = 42f,
+                                physical = 78f
                             ),
                             playerB = PlayerRadarStats(
-                                playerName = if (match.awayTeam.contains("سيتي")) "إيرلينغ هالاند" else "بوكايو ساكا",
-                                pace = 89f,
-                                shooting = 95f,
-                                passing = 72f,
-                                dribbling = 82f,
-                                defense = 42f,
-                                physical = 90f
+                                playerName = "${awayStar.name} (${match.awayTeam})",
+                                pace = (awayStar.rating * 10f + 2).coerceIn(65f, 95f),
+                                shooting = (awayStar.rating * 10.4f).coerceIn(60f, 96f),
+                                passing = (awayStar.rating * 9.5f).coerceIn(60f, 93f),
+                                dribbling = (awayStar.rating * 10.0f).coerceIn(60f, 94f),
+                                defense = 44f,
+                                physical = 82f
                             )
                         )
                     }
@@ -638,6 +675,22 @@ fun MatchDetailScreen(
                 teamColor = selected3DTeamColor,
                 playerCondition = playerCond,
                 onDismiss = { selected3DPlayer = null }
+            )
+        }
+
+        // Full Club Detail Dialog (Overview, Squad, Matches, Transfers, Club Scorers)
+        val teamToView = selectedTeamForDialog
+        if (teamToView != null) {
+            TeamHubDialog(
+                teamName = teamToView,
+                leagueName = match.league,
+                onDismiss = { selectedTeamForDialog = null },
+                onPlayerClick = { playerLineup ->
+                    selected3DPlayer = playerLineup
+                    selected3DTeamName = teamToView
+                    selected3DTeamColor = if (teamToView == match.homeTeam) AppColors.NeonBlue else AppColors.Coral
+                    selectedTeamForDialog = null
+                }
             )
         }
     }

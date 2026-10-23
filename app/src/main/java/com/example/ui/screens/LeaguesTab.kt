@@ -22,15 +22,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.data.provider.DataResult
+import com.example.data.provider.FootballDataOrgProvider
 import com.example.model.League
 import com.example.model.LeagueTier
+import com.example.model.PlayerLineup
+import com.example.model.StandingRow
+import com.example.model.TopScorer
 import com.example.ui.components.GlassCard
+import com.example.ui.components.Player3DBottomSheet
+import com.example.ui.components.PlayerAvatarView
+import com.example.ui.components.TeamDetailDialog
+import com.example.data.provider.PlayerDatabaseProvider
+import com.example.ui.components.TeamHubDialog
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -42,6 +54,9 @@ fun LeaguesTab(
     var selectedTier by remember { mutableStateOf<LeagueTier?>(null) }
     var selectedLeagueId by remember { mutableStateOf(leagues.firstOrNull()?.id ?: "") }
     var subTab by remember { mutableIntStateOf(0) } // 0: جدول الترتيب, 1: الهدافون
+
+    var selectedTeamDetail by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selectedPlayer3D by remember { mutableStateOf<PlayerLineup?>(null) }
 
     val filteredLeagues = remember(leagues, searchQuery, selectedTier) {
         leagues.filter { league ->
@@ -58,6 +73,26 @@ fun LeaguesTab(
         filteredLeagues.firstOrNull { it.id == selectedLeagueId }
             ?: filteredLeagues.firstOrNull()
             ?: leagues.firstOrNull()
+    }
+
+    val fdoCode = remember(currentLeague) {
+        currentLeague?.let { FootballDataOrgProvider.getCompetitionCode(it.name.ifBlank { it.id }) }
+    }
+
+    val fdoStandingsState = produceState<DataResult<List<StandingRow>>?>(initialValue = null, fdoCode) {
+        value = if (fdoCode != null) {
+            FootballDataOrgProvider.fetchStandings(fdoCode)
+        } else {
+            null
+        }
+    }
+
+    val fdoScorersState = produceState<DataResult<List<TopScorer>>?>(initialValue = null, fdoCode) {
+        value = if (fdoCode != null) {
+            FootballDataOrgProvider.fetchTopScorers(fdoCode, limit = 20)
+        } else {
+            null
+        }
     }
 
     LazyColumn(
@@ -285,7 +320,53 @@ fun LeaguesTab(
             }
 
             if (subTab == 0) {
-                // Standings Table Header
+                // Standings Tab
+                val standingsResult = fdoStandingsState.value
+                val isFdo = fdoCode != null
+
+                // Status Banner
+                item {
+                    val statusText = when {
+                        isFdo && standingsResult == null -> "جارٍ استرداد الترتيب المباشر من football-data.org ($fdoCode)..."
+                        isFdo && standingsResult is DataResult.Success -> "المصدر: football-data.org (مباشر • كاش 30 دقيقة)"
+                        isFdo && standingsResult is DataResult.Empty -> "جدول الترتيب: غير متاح (${standingsResult.message})"
+                        isFdo && standingsResult is DataResult.Error -> "football-data.org: ${standingsResult.message}"
+                        else -> "المصدر: قاعدة بيانات البطولة (${currentLeague.name})"
+                    }
+                    val statusColor = when {
+                        isFdo && standingsResult is DataResult.Success -> AppColors.NeonCyan
+                        isFdo && standingsResult is DataResult.Error -> AppColors.Warning
+                        else -> AppColors.TextMuted
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AppColors.Surface)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isFdo && standingsResult == null) {
+                            CircularProgressIndicator(
+                                color = AppColors.NeonBlue,
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = statusText,
+                            color = statusColor,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Table Header
                 item {
                     Row(
                         modifier = Modifier
@@ -297,17 +378,24 @@ fun LeaguesTab(
                     ) {
                         Text("#", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(22.dp))
                         Text("الفريق", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                        Text("لعب", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(32.dp), textAlign = TextAlign.Center)
-                        Text("فاز", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                        Text("تعادل", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                        Text("خسر", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                        Text("فارق", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(32.dp), textAlign = TextAlign.Center)
-                        Text("نقاط", color = AppColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center)
+                        Text("لعب", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
+                        Text("فاز", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+                        Text("تعادل", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+                        Text("خسر", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+                        Text("فارق", color = AppColors.TextMuted, fontSize = 11.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
+                        Text("نقاط", color = AppColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(34.dp), textAlign = TextAlign.Center)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                 }
 
-                if (currentLeague.standings.isEmpty()) {
+                val activeStandings = when {
+                    isFdo && standingsResult is DataResult.Success -> standingsResult.data
+                    isFdo && standingsResult is DataResult.Error && currentLeague.standings.isNotEmpty() -> currentLeague.standings
+                    !isFdo -> currentLeague.standings
+                    else -> emptyList()
+                }
+
+                if (activeStandings.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier
@@ -315,14 +403,23 @@ fun LeaguesTab(
                                 .padding(vertical = 30.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("جدول الترتيب قيد التحديث من مزود البيانات...", color = AppColors.TextMuted, fontSize = 12.sp)
+                            Text(
+                                text = if (isFdo && standingsResult is DataResult.Error) {
+                                    "غير متاح: ${standingsResult.message}"
+                                } else {
+                                    "جدول الترتيب غير متاح لهذه البطولة حالياً."
+                                },
+                                color = AppColors.TextMuted,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 } else {
-                    items(currentLeague.standings) { row ->
+                    items(activeStandings) { row ->
                         val isChampions = row.rank <= 4
                         val isEuropa = row.rank in 5..6
-                        val isRelegation = currentLeague.standings.size >= 6 && row.rank >= (currentLeague.standings.size - 1)
+                        val isRelegation = activeStandings.size >= 6 && row.rank >= (activeStandings.size - 2)
                         val rankColor = when {
                             isChampions -> AppColors.NeonBlue
                             isEuropa -> AppColors.NeonPurple
@@ -341,7 +438,8 @@ fun LeaguesTab(
                                 .padding(vertical = 3.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(rowBg)
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                                .clickable { selectedTeamDetail = row.teamName to currentLeague.name }
+                                .padding(horizontal = 8.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -359,24 +457,60 @@ fun LeaguesTab(
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = row.teamName,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text("${row.played}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(32.dp), textAlign = TextAlign.Center)
-                            Text("${row.won}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                            Text("${row.drawn}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                            Text("${row.lost}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
+                            if (row.logo.isNotBlank()) {
+                                AsyncImage(
+                                    model = row.logo,
+                                    contentDescription = row.teamName,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = row.teamName,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (row.form.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        row.form.takeLast(5).forEach { badge ->
+                                            val (bg, textColor) = when (badge) {
+                                                "W" -> AppColors.Success to Color.Black
+                                                "D" -> AppColors.Warning to Color.Black
+                                                "L" -> AppColors.NeonRed to Color.White
+                                                else -> AppColors.SurfaceSoft to AppColors.TextSoft
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .clip(CircleShape)
+                                                    .background(bg),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = badge,
+                                                    color = textColor,
+                                                    fontSize = 7.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Text("${row.played}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
+                            Text("${row.won}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+                            Text("${row.drawn}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+                            Text("${row.lost}", color = AppColors.TextSoft, fontSize = 12.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
                             Text(
                                 text = if (row.goalDiff > 0) "+${row.goalDiff}" else "${row.goalDiff}",
                                 color = if (row.goalDiff >= 0) AppColors.NeonCyan else AppColors.NeonRed,
                                 fontSize = 11.sp,
-                                modifier = Modifier.width(32.dp),
+                                modifier = Modifier.width(30.dp),
                                 textAlign = TextAlign.Center
                             )
                             Text(
@@ -384,7 +518,7 @@ fun LeaguesTab(
                                 color = AppColors.NeonCyan,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
-                                modifier = Modifier.width(36.dp),
+                                modifier = Modifier.width(34.dp),
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -416,8 +550,60 @@ fun LeaguesTab(
                     }
                 }
             } else {
-                // Top Scorers List
-                if (currentLeague.topScorers.isEmpty()) {
+                // Top Scorers Tab
+                val scorersResult = fdoScorersState.value
+                val isFdo = fdoCode != null
+
+                // Status Banner
+                item {
+                    val statusText = when {
+                        isFdo && scorersResult == null -> "جارٍ استرداد قائمة الهدافين الرسمية من football-data.org ($fdoCode)..."
+                        isFdo && scorersResult is DataResult.Success -> "قائمة الهدافين الرسمية: football-data.org (مباشر • كاش 30 دقيقة)"
+                        isFdo && scorersResult is DataResult.Empty -> "قائمة الهدافين: غير متاح (${scorersResult.message})"
+                        isFdo && scorersResult is DataResult.Error -> "football-data.org: ${scorersResult.message}"
+                        else -> "قائمة الهدافين: ${currentLeague.name}"
+                    }
+                    val statusColor = when {
+                        isFdo && scorersResult is DataResult.Success -> AppColors.NeonCyan
+                        isFdo && scorersResult is DataResult.Error -> AppColors.Warning
+                        else -> AppColors.TextMuted
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AppColors.Surface)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isFdo && scorersResult == null) {
+                            CircularProgressIndicator(
+                                color = AppColors.NeonBlue,
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = statusText,
+                            color = statusColor,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                val activeScorers = when {
+                    isFdo && scorersResult is DataResult.Success -> scorersResult.data
+                    isFdo && scorersResult is DataResult.Error && currentLeague.topScorers.isNotEmpty() -> currentLeague.topScorers
+                    !isFdo -> currentLeague.topScorers
+                    else -> emptyList()
+                }
+
+                if (activeScorers.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier
@@ -425,16 +611,26 @@ fun LeaguesTab(
                                 .padding(vertical = 30.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("قائمة الهدافين قيد التحديث...", color = AppColors.TextMuted, fontSize = 12.sp)
+                            Text(
+                                text = if (isFdo && scorersResult is DataResult.Error) {
+                                    "غير متاح: ${scorersResult.message}"
+                                } else {
+                                    "قائمة الهدافين: غير متاح لهذه البطولة في المصادر الحالية."
+                                },
+                                color = AppColors.TextMuted,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 } else {
-                    items(currentLeague.topScorers) { scorer ->
+                    items(activeScorers) { scorer ->
                         GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
-                            contentPadding = 10.dp
+                            contentPadding = 10.dp,
+                            onClick = { selectedTeamDetail = scorer.teamName to currentLeague.name }
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -447,6 +643,24 @@ fun LeaguesTab(
                                     fontWeight = FontWeight.Black,
                                     modifier = Modifier.width(28.dp)
                                 )
+                                PlayerAvatarView(
+                                    photoUrl = scorer.playerPhoto.ifBlank { null },
+                                    playerName = scorer.playerName,
+                                    playerNumber = scorer.penalties,
+                                    teamColor = if (scorer.rank == 1) AppColors.Gold else AppColors.NeonCyan,
+                                    size = 40.dp,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.clickable {
+                                        selectedPlayer3D = PlayerLineup(
+                                            number = scorer.rank,
+                                            name = scorer.playerName,
+                                            position = "FWD",
+                                            rating = 8.5f,
+                                            photoUrl = scorer.playerPhoto
+                                        )
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = scorer.playerName,
@@ -454,11 +668,21 @@ fun LeaguesTab(
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Text(
-                                        text = scorer.teamName,
-                                        color = AppColors.TextSoft,
-                                        fontSize = 11.sp
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (scorer.teamLogo.isNotBlank()) {
+                                            AsyncImage(
+                                                model = scorer.teamLogo,
+                                                contentDescription = scorer.teamName,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        Text(
+                                            text = scorer.teamName,
+                                            color = AppColors.TextSoft,
+                                            fontSize = 11.sp
+                                        )
+                                    }
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -475,7 +699,7 @@ fun LeaguesTab(
                                             fontSize = 9.sp
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(14.dp))
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
                                             text = "${scorer.assists}",
@@ -489,6 +713,22 @@ fun LeaguesTab(
                                             fontSize = 9.sp
                                         )
                                     }
+                                    if (scorer.penalties > 0) {
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "${scorer.penalties}",
+                                                color = AppColors.Gold,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "جزاء",
+                                                color = AppColors.TextMuted,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -496,5 +736,30 @@ fun LeaguesTab(
                 }
             }
         }
+    }
+
+    // Complete Interconnection: Team Profile Dialog with Squad, Transfers, and Top Scorers
+    val teamToView = selectedTeamDetail
+    if (teamToView != null) {
+        TeamHubDialog(
+            teamName = teamToView.first,
+            leagueName = teamToView.second,
+            onDismiss = { selectedTeamDetail = null },
+            onPlayerClick = { player ->
+                selectedPlayer3D = player
+            }
+        )
+    }
+
+    // Complete Interconnection: 3D Player Interactive Sheet
+    val playerToView = selectedPlayer3D
+    if (playerToView != null) {
+        Player3DBottomSheet(
+            player = playerToView,
+            teamName = selectedTeamDetail?.first ?: "",
+            teamColor = AppColors.NeonBlue,
+            playerCondition = null,
+            onDismiss = { selectedPlayer3D = null }
+        )
     }
 }

@@ -36,7 +36,10 @@ fun SportsTab(
 
     val filteredMatches = remember(matches, selectedSport) {
         if (selectedSport == SportType.ALL) matches
-        else matches.filter { it.sport == selectedSport.id }
+        else matches.filter {
+            if (selectedSport == SportType.FOOTBALL) it.sport.lowercase() in listOf("football", "soccer")
+            else it.sport.equals(selectedSport.id, ignoreCase = true)
+        }
     }
 
     LazyColumn(

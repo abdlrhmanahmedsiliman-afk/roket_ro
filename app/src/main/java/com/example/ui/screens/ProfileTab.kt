@@ -93,19 +93,29 @@ fun ProfileTab(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(AppColors.NeonCyan.copy(alpha = 0.2f))
+                                        .background(AppColors.NeonGold.copy(alpha = 0.25f))
+                                        .border(1.dp, AppColors.NeonGold.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (userProfile.isGoogleUser) "GOOGLE VERIFIED" else "PRO VIP",
-                                        color = AppColors.NeonCyan,
+                                        text = "المؤسس • FOUNDER",
+                                        color = AppColors.NeonGold,
                                         fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Black
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = "المؤسس والمدير العام لتطبيق roket_ro",
+                                color = AppColors.NeonCyan,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
                                 text = userProfile.email,

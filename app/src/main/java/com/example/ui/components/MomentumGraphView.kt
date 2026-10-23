@@ -70,12 +70,19 @@ fun MomentumGraphView(
                 )
             }
 
-            Text(
-                text = "مؤشر ضغط واستحواذ المباراة (Momentum)",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "مؤشر زخم وضغط المباراة (Momentum)",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "محسوب خوارزمياً وفق الدقائق والأحداث والسيطرة",
+                    color = AppColors.TextMuted,
+                    fontSize = 9.sp
+                )
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

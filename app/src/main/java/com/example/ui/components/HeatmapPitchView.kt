@@ -42,12 +42,19 @@ fun HeatmapPitchView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "خريطة النشاط والحرارة (Heatmap)",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column {
+                Text(
+                    text = "خريطة النشاط والحرارة (Heatmap)",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "نموذج بصري تقديري لتمركز الفريقين (Visual Model)",
+                    color = AppColors.TextMuted,
+                    fontSize = 10.sp
+                )
+            }
 
             // Selector Tab
             Row(

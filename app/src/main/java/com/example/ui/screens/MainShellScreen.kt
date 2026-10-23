@@ -55,6 +55,7 @@ fun MainShellScreen(
     val matches by repository.matches.collectAsState()
     val leagues by repository.leagues.collectAsState()
     val isLoading by repository.isLoading.collectAsState()
+    val sportsNews by repository.sportsNews.collectAsState()
     val refreshNotification by repository.refreshNotification.collectAsState()
     val connectionQuality by repository.connectionMonitor?.quality?.collectAsState() ?: remember { mutableStateOf(null) }
     val unreadNotifsCount by notificationCenter?.unreadCount?.collectAsState() ?: remember { mutableIntStateOf(2) }
@@ -62,8 +63,9 @@ fun MainShellScreen(
     // Sub-screens conditional rendering
     if (selectedMatch != null) {
         MatchDetailScreen(
-            match = selectedMatch!!,
+            initialMatch = selectedMatch!!,
             aiService = aiService,
+            repository = repository,
             onBack = { selectedMatch = null },
             onToggleFavorite = {
                 preferencesManager.toggleFavoriteMatch(selectedMatch!!.id)
@@ -141,37 +143,24 @@ fun MainShellScreen(
                                     )
                                 }
                             }
-                            Text(
-                                text = currentSection.subtitle,
-                                color = AppColors.TextMuted,
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        // 60fps & Network Health Chip
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(AppColors.Surface)
-                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 7.dp, vertical = 4.dp)
-                        ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(connectionQuality?.indicatorColorHex ?: 0xFF4FE3C1))
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "60fps",
+                                    text = "المؤسس: عبد الرحمن أحمد عبد الهادي",
                                     color = AppColors.NeonCyan,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "• ${currentSection.subtitle}",
+                                    color = AppColors.TextMuted,
+                                    fontSize = 10.5.sp,
+                                    maxLines = 1
                                 )
                             }
                         }
+
+
 
                         Spacer(modifier = Modifier.width(6.dp))
 
@@ -312,7 +301,8 @@ fun MainShellScreen(
                                 preferencesManager.toggleFavoriteMatch(match.id)
                                 repository.refreshMatches()
                             },
-                            refreshNotification = refreshNotification
+                            refreshNotification = refreshNotification,
+                            news = sportsNews
                         )
                     }
                     MainNavSection.LEAGUES -> {

@@ -19,7 +19,8 @@ data class StandingRow(
     val goalsAgainst: Int,
     val goalDiff: Int,
     val points: Int,
-    val form: List<String> = listOf("W", "D", "W", "W", "L")
+    val form: List<String> = emptyList(),
+    val teamId: Int = 0
 )
 
 data class TopScorer(
@@ -27,7 +28,11 @@ data class TopScorer(
     val playerName: String,
     val teamName: String,
     val goals: Int,
-    val assists: Int
+    val assists: Int = 0,
+    val teamLogo: String = "",
+    val playerPhoto: String = "",
+    val penalties: Int = 0,
+    val playedMatches: Int = 0
 )
 
 data class League(
